@@ -126,6 +126,7 @@ val interp : raw_tactic_expr -> unit Proofview.tactic
 
 (** Hides interpretation for pretty-print *)
 
+val hide_interp_t : bool -> raw_tactic_expr -> unit Proofview.tactic option -> (Environ.env -> glob_tactic_expr -> glob_tactic_expr) -> unit Proofview.tactic
 val hide_interp : bool -> raw_tactic_expr -> unit Proofview.tactic option -> unit Proofview.tactic
 
 (** Internals that can be useful for syntax extensions. *)

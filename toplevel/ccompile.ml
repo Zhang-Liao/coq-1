@@ -85,6 +85,8 @@ let ensure_exists_with_prefix f_in f_out src_suffix tgt_suffix =
     | Some f -> ensure tgt_suffix long_f_dot_src f in
   long_f_dot_src, long_f_dot_tgt
 
+let ltacrecordhook = ref (fun file -> ())
+
 (* Compile a vernac file *)
 let compile opts copts ~echo ~f_in ~f_out =
   let open Vernac.State in
@@ -133,7 +135,8 @@ let compile opts copts ~echo ~f_in ~f_out =
       Aux_file.record_in_aux_at "vo_compile_time"
         (Printf.sprintf "%.3f" (wall_clock2 -. wall_clock1));
       Aux_file.stop_aux_file ();
-      Dumpglob.end_dump_glob ()
+      Dumpglob.end_dump_glob ();
+      !ltacrecordhook long_f_dot_vo
 
   | BuildVio ->
       Flags.record_aux_file := false;

@@ -641,11 +641,18 @@ let vernac_start_proof ~atts kind l =
     List.iter (fun ((id, _), _) -> Dumpglob.dump_definition id false "prf") l;
   start_proof_and_print ~program_mode:atts.program (local, atts.polymorphic, Proof kind) l
 
+let vernac_end_proof_hook = ref (fun _ -> ())
 let vernac_end_proof ?pstate:ontop ?proof = function
   | Admitted ->
     with_pstate ~pstate:ontop (save_proof_admitted ?proof);
     ontop
   | Proved (opaque,idopt) ->
+    !vernac_end_proof_hook
+    (match proof with
+    | None -> (match ontop with
+              | None -> Names.Id.of_string "unknown"
+              | Some ps  -> Proof_global.get_current_proof_name (Proof_global.get_current_pstate ps))
+    | Some (po, _) -> po.Proof_global.id);
     save_proof_proved ?ontop ?proof ~opaque ~idopt
 
 let vernac_exact_proof ~pstate c =
@@ -1052,6 +1059,8 @@ let warn_require_in_section =
   CWarnings.create ~name ~category
     (fun () -> strbrk "Use of “Require” inside a section is deprecated.")
 
+let requirehook = ref (fun files -> ())
+
 let vernac_require from import qidl =
   if Lib.sections_are_opened () then warn_require_in_section ();
   let root = match from with
@@ -1071,8 +1080,10 @@ let vernac_require from import qidl =
   let modrefl = List.map locate qidl in
   if Dumpglob.dump () then
     List.iter2 (fun {CAst.loc} dp -> Dumpglob.dump_libref ?loc dp "lib") qidl (List.map fst modrefl);
-  let lib_resolver = Loadpath.try_locate_absolute_library in
-  Library.require_library_from_dirpath ~lib_resolver modrefl import
+
+let lib_resolver = Loadpath.try_locate_absolute_library in
+  Library.require_library_from_dirpath ~lib_resolver modrefl import;
+  !requirehook modrefl
 
 (* Coercions and canonical structures *)
 
@@ -2321,37 +2332,6 @@ let locate_if_not_already ?loc (e, info) =
   | Some l -> (e, info)
 
 exception End_of_input
-
-(* "locality" is the prefix "Local" attribute, while the "local" component
- * is the outdated/deprecated "Local" attribute of some vernacular commands
- * still parsed as the obsolete_locality grammar entry for retrocompatibility.
- * loc is the Loc.t of the vernacular command being interpreted. *)
-let rec interp_expr ?proof ~atts ~st c : Proof_global.t option =
-  let pstate = st.Vernacstate.proof in
-  vernac_pperr_endline (fun () -> str "interpreting: " ++ Ppvernac.pr_vernac_expr c);
-  match c with
-
-  (* The STM should handle that, but LOAD bypasses the STM... *)
-  | VernacAbortAll    -> CErrors.user_err  (str "AbortAll cannot be used through the Load command")
-  | VernacRestart     -> CErrors.user_err  (str "Restart cannot be used through the Load command")
-  | VernacUndo _      -> CErrors.user_err  (str "Undo cannot be used through the Load command")
-  | VernacUndoTo _    -> CErrors.user_err  (str "UndoTo cannot be used through the Load command")
-
-  (* Resetting *)
-  | VernacResetName _  -> anomaly (str "VernacResetName not handled by Stm.")
-  | VernacResetInitial -> anomaly (str "VernacResetInitial not handled by Stm.")
-  | VernacBack _       -> anomaly (str "VernacBack not handled by Stm.")
-  | VernacBackTo _     -> anomaly (str "VernacBackTo not handled by Stm.")
-
-  (* This one is possible to handle here *)
-  | VernacAbort id    -> CErrors.user_err  (str "Abort cannot be used through the Load command")
-
-  (* Loading a file requires access to the control interpreter so
-     [vernac_load] is mutually-recursive with [interp_expr] *)
-  | VernacLoad (verbosely,fname) ->
-    unsupported_attributes atts;
-    vernac_load ?proof ~verbosely ~st fname
-
 let open_proof_hook = ref (fun id -> Feedback.msg_info Pp.(str "opened " ++ Id.print id))
 
 let interp_typed_vernac c ~pstate =

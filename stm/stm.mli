@@ -297,6 +297,8 @@ val sentence_exec_hook : (Stateid.t -> unit) Hook.t
 
 val get_doc : Feedback.doc_id -> doc
 
+val neighbors : doc:doc -> Stateid.t -> Stateid.t list
+
 val state_of_id : doc:doc ->
   Stateid.t -> [ `Valid of Vernacstate.t option | `Expired | `Error of exn ]
 

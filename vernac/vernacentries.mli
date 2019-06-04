@@ -15,6 +15,10 @@ val get_default_proof_mode : unit -> Pvernac.proof_mode
 
 val proof_mode_opt_name : string list
 
+val requirehook : ((Names.DirPath.t * CUnix.physical_path) list -> unit) ref
+
+val vernac_end_proof_hook : (Names.Id.t -> unit) ref
+
 (** Vernacular entries *)
 val vernac_require :
   Libnames.qualid option -> bool option -> Libnames.qualid list -> unit
