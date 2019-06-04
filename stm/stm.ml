@@ -388,6 +388,8 @@ module VCS : sig
   val backup : unit -> vcs
   val restore : vcs -> unit
 
+  val dag : unit -> (transaction, vcs state_info, box) Vcs_.Dag.t
+
 end = struct (* {{{ *)
 
   include Vcs_
@@ -521,6 +523,8 @@ end = struct (* {{{ *)
 
   type vcs = (branch_type, transaction, vcs state_info, box) t
   let vcs : vcs ref = ref (empty Stateid.dummy)
+
+  let dag () = Vcs_.dag !vcs
 
   let doc_type = ref (Interactive (Names.DirPath.make []))
   let ldir = ref Names.DirPath.empty
@@ -3221,6 +3225,13 @@ let get_current_state ~doc = VCS.cur_tip ()
 let get_ldir ~doc = VCS.get_ldir ()
 
 let get_doc did = dummy_doc
+
+let neighbors ~doc id =
+  let dag = VCS.dag () in
+  try
+    List.map fst (Vcs_.Dag.from_node dag id)
+  with
+    Not_found -> []
 
 (*********************** TTY API (PG, coqtop, coqc) ***************************)
 (******************************************************************************)

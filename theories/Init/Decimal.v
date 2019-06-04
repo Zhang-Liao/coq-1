@@ -19,6 +19,8 @@
 (** Unsigned integers are just lists of digits.
     For instance, ten is (D1 (D0 Nil)) *)
 
+Require Import Notations.
+
 Inductive uint :=
  | Nil
  | D0 (_:uint)

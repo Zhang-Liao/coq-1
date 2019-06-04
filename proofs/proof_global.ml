@@ -242,6 +242,8 @@ let default_universe_decl =
     univdecl_constraints = Univ.Constraint.empty;
     univdecl_extensible_constraints = true }
 
+let start_proof_hook = ref (fun _ -> ())
+
 (** [start_proof sigma id pl str goals terminator] starts a proof of name
     [id] with goals [goals] (a list of pairs of environment and
     conclusion); [str] describes what kind of theorem/definition this
@@ -260,7 +262,7 @@ let start_proof sigma id ?(pl=default_universe_decl) str goals terminator =
     strength = str;
     mode = find_proof_mode "No";
     universe_decl = pl } in
-  push initial_state pstates
+  push initial_state pstates; !start_proof_hook id
 
 let start_dependent_proof id ?(pl=default_universe_decl) str goals terminator =
   let initial_state = {

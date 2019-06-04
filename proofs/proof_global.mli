@@ -60,6 +60,8 @@ type closed_proof = proof_object * proof_terminator
 val make_terminator : (proof_ending -> unit) -> proof_terminator
 val apply_terminator : proof_terminator -> proof_ending -> unit
 
+val start_proof_hook : (Names.Id.t -> unit) ref
+
 (** [start_proof id str pl goals terminator] starts a proof of name [id]
     with goals [goals] (a list of pairs of environment and
     conclusion); [str] describes what kind of theorem/definition this

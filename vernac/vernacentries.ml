@@ -510,9 +510,17 @@ let vernac_start_proof ~atts kind l =
     List.iter (fun ((id, _), _) -> Dumpglob.dump_definition id false "prf") l;
   start_proof_and_print (local, atts.polymorphic, Proof kind) l no_hook
 
+let vernac_end_proof_hook = ref (fun _ -> ())
+
 let vernac_end_proof ?proof = function
   | Admitted          -> save_proof ?proof Admitted
-  | Proved (_,_) as e -> save_proof ?proof e
+  | Proved (_,_) as e -> save_proof ?proof e; !vernac_end_proof_hook (
+    try
+      Proof_global.get_current_proof_name ()
+    with
+    | Proof_global.NoCurrentProof -> Names.Id.of_string "unknown"
+    | e -> raise e
+    )
 
 let vernac_exact_proof c =
   (* spiwack: for simplicity I do not enforce that "Proof proof_term" is
@@ -811,6 +819,8 @@ let warn_require_in_section =
   CWarnings.create ~name ~category
     (fun () -> strbrk "Use of “Require” inside a section is deprecated.")
 
+let requirehook = ref (fun files -> ())
+
 let vernac_require from import qidl =
   if Lib.sections_are_opened () then warn_require_in_section ();
   let qidl = List.map qualid_of_reference qidl in
@@ -833,7 +843,8 @@ let vernac_require from import qidl =
   let modrefl = List.map locate qidl in
   if Dumpglob.dump () then
     List.iter2 (fun {CAst.loc} dp -> Dumpglob.dump_libref ?loc dp "lib") qidl (List.map fst modrefl);
-  Library.require_library_from_dirpath modrefl import
+  Library.require_library_from_dirpath modrefl import;
+  !requirehook modrefl
 
 (* Coercions and canonical structures *)
 

@@ -12,6 +12,10 @@ open Misctypes
 
 val dump_global : Libnames.reference or_by_notation -> unit
 
+val requirehook : ((Names.DirPath.t * CUnix.physical_path) list -> unit) ref
+
+val vernac_end_proof_hook : (Names.Id.t -> unit) ref
+
 (** Vernacular entries *)
 val vernac_require :
   Libnames.reference option -> bool option -> Libnames.reference list -> unit

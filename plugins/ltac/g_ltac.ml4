@@ -357,6 +357,7 @@ open Vernacexpr
 open Vernac_classifier
 open Goptions
 open Libnames
+(*open Ltacrecord*)
 
 let print_info_trace = ref None
 
@@ -368,19 +369,31 @@ let _ = declare_int_option {
   optwrite = fun n -> print_info_trace := n;
 }
 
+let recorder _ tac = tac
+
 let vernac_solve n info tcom b =
   let status = Proof_global.with_current_proof (fun etac p ->
     let with_end_tac = if b then Some etac else None in
     let global = match n with SelectAll | SelectList _ -> true | _ -> false in
     let info = Option.append info !print_info_trace in
     let (p,status) =
-      Pfedit.solve n info (Tacinterp.hide_interp global tcom None) ?with_end_tac p
+      Pfedit.solve n info (Tacinterp.hide_interp_t global tcom None recorder) ?with_end_tac p
     in
     (* in case a strict subtree was completed,
        go back to the top of the prooftree *)
     let p = Proof.maximal_unfocus Vernacentries.command_focus p in
     p,status) in
     if not status then Feedback.feedback Feedback.AddedAxiom
+
+(*
+TACTIC EXTEND predict
+  [ "predict" ] -> [ userPredict ]
+END
+
+TACTIC EXTEND search
+  [ "search" ] -> [ userSearch ]
+END
+*)
 
 let pr_ltac_selector s = Pptactic.pr_goal_selector ~toplevel:true s
 

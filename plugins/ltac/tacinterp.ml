@@ -1880,10 +1880,12 @@ let interp t = interp_tac_gen Id.Map.empty Id.Set.empty (get_debug()) t
 
 (* Used to hide interpretation for pretty-print, now just launch tactics *)
 (* [global] means that [t] should be internalized outside of goals. *)
-let hide_interp global t ot =
+
+let hide_interp_t global t ot transform =
   let hide_interp env =
     let ist = Genintern.empty_glob_sign env in
     let te = intern_pure_tactic ist t in
+    let te = transform env te in
     let t = eval_tactic te in
     match ot with
     | None -> t
@@ -1896,6 +1898,8 @@ let hide_interp global t ot =
     Proofview.Goal.enter begin fun gl ->
       hide_interp (Proofview.Goal.env gl)
     end
+
+let hide_interp global t ot = hide_interp_t global t ot (fun e x -> x)
 
 (***************************************************************************)
 (** Register standard arguments *)
