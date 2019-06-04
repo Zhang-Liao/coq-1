@@ -357,7 +357,7 @@ open Vernacexpr
 open Vernac_classifier
 open Goptions
 open Libnames
-(*open Ltacrecord*)
+open Ltacrecord
 
 let print_info_trace = ref None
 
@@ -368,8 +368,6 @@ let _ = declare_int_option {
   optread = (fun () -> !print_info_trace);
   optwrite = fun n -> print_info_trace := n;
 }
-
-let recorder _ tac = tac
 
 let vernac_solve n info tcom b =
   let status = Proof_global.with_current_proof (fun etac p ->
@@ -385,7 +383,6 @@ let vernac_solve n info tcom b =
     p,status) in
     if not status then Feedback.feedback Feedback.AddedAxiom
 
-(*
 TACTIC EXTEND predict
   [ "predict" ] -> [ userPredict ]
 END
@@ -393,7 +390,6 @@ END
 TACTIC EXTEND search
   [ "search" ] -> [ userSearch ]
 END
-*)
 
 let pr_ltac_selector s = Pptactic.pr_goal_selector ~toplevel:true s
 
