@@ -24,4 +24,15 @@ Rewrite
 G_rewrite
 G_eqdecide
 G_tactic
+
+Timeouttac
+Base64
+Hammer_errors
+Hhlib
+Hh_term
+Features
+Knn
+Globalize
+Ltacrecord
+
 G_ltac
