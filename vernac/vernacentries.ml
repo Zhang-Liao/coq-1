@@ -1080,10 +1080,9 @@ let vernac_require from import qidl =
   let modrefl = List.map locate qidl in
   if Dumpglob.dump () then
     List.iter2 (fun {CAst.loc} dp -> Dumpglob.dump_libref ?loc dp "lib") qidl (List.map fst modrefl);
-
-let lib_resolver = Loadpath.try_locate_absolute_library in
-  Library.require_library_from_dirpath ~lib_resolver modrefl import;
-  !requirehook modrefl
+  let lib_resolver = Loadpath.try_locate_absolute_library in
+    Library.require_library_from_dirpath ~lib_resolver modrefl import;
+    !requirehook modrefl
 
 (* Coercions and canonical structures *)
 
