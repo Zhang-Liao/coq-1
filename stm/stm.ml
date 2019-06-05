@@ -2140,6 +2140,7 @@ and Reach : sig
 
 end = struct (* {{{ *)
 
+(*TODO: Use this to detect if we are async *)
 let async_policy () =
   if Attributes.is_universe_polymorphism () then false (* FIXME this makes no sense, it is the default value of the attribute *)
   else if VCS.is_interactive () then
