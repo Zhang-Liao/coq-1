@@ -2322,6 +2322,38 @@ let locate_if_not_already ?loc (e, info) =
 
 exception End_of_input
 
+(* "locality" is the prefix "Local" attribute, while the "local" component
+ * is the outdated/deprecated "Local" attribute of some vernacular commands
+ * still parsed as the obsolete_locality grammar entry for retrocompatibility.
+ * loc is the Loc.t of the vernacular command being interpreted. *)
+let rec interp_expr ?proof ~atts ~st c : Proof_global.t option =
+  let pstate = st.Vernacstate.proof in
+  vernac_pperr_endline (fun () -> str "interpreting: " ++ Ppvernac.pr_vernac_expr c);
+  match c with
+
+  (* The STM should handle that, but LOAD bypasses the STM... *)
+  | VernacAbortAll    -> CErrors.user_err  (str "AbortAll cannot be used through the Load command")
+  | VernacRestart     -> CErrors.user_err  (str "Restart cannot be used through the Load command")
+  | VernacUndo _      -> CErrors.user_err  (str "Undo cannot be used through the Load command")
+  | VernacUndoTo _    -> CErrors.user_err  (str "UndoTo cannot be used through the Load command")
+
+  (* Resetting *)
+  | VernacResetName _  -> anomaly (str "VernacResetName not handled by Stm.")
+  | VernacResetInitial -> anomaly (str "VernacResetInitial not handled by Stm.")
+  | VernacBack _       -> anomaly (str "VernacBack not handled by Stm.")
+  | VernacBackTo _     -> anomaly (str "VernacBackTo not handled by Stm.")
+
+  (* This one is possible to handle here *)
+  | VernacAbort id    -> CErrors.user_err  (str "Abort cannot be used through the Load command")
+
+  (* Loading a file requires access to the control interpreter so
+     [vernac_load] is mutually-recursive with [interp_expr] *)
+  | VernacLoad (verbosely,fname) ->
+    unsupported_attributes atts;
+    vernac_load ?proof ~verbosely ~st fname
+
+let open_proof_hook = ref (fun id -> Feedback.msg_info Pp.(str "opened " ++ Id.print id))
+
 let interp_typed_vernac c ~pstate =
   let open Proof_global in
   let open Vernacextend in
@@ -2337,7 +2369,9 @@ let interp_typed_vernac c ~pstate =
         f ~pstate:(Proof_global.get_current_pstate pstate);
         Proof_global.discard_current pstate)
   | VtOpenProof f ->
-    Some (push ~ontop:pstate (f ()))
+    let proof = f () in
+    !open_proof_hook (Proof_global.get_current_proof_name proof);
+    Some (push ~ontop:pstate proof)
   | VtModifyProof f ->
     modify_pstate f ~pstate
   | VtReadProofOpt f ->
