@@ -102,10 +102,10 @@ reference manual. Here are the most important user-visible changes:
     extensionality lemma:
 
     - interactive mode: :n:`under @term`, associated terminator: :tacn:`over`
-    - one-liner mode: `under @term do [@tactic | ...]`
+    - one-liner mode: :n:`under @term do [@tactic | ...]`
 
     It can take occurrence switches, contextual patterns, and intro patterns:
-    :g:`under {2}[in RHS]eq_big => [i|i ?] do ...`
+    :g:`under {2}[in RHS]eq_big => [i|i ?]`
     (`#9651 <https://github.com/coq/coq/pull/9651>`_,
     by Erik Martin-Dorel and Enrico Tassi).
 
@@ -120,7 +120,9 @@ reference manual. Here are the most important user-visible changes:
 
 - CoqIDE:
 
-  - CoqIDE now depends on gtk+3 and lablgtk3 instead of gtk+2 and lablgtk2
+  - CoqIDE now depends on gtk+3 and lablgtk3 instead of gtk+2 and lablgtk2.
+    The INSTALL file available in the Coq sources has been updated to list
+    the new dependencies
     (`#9279 <https://github.com/coq/coq/pull/9279>`_,
     by Hugo Herbelin, with help from Jacques Garrigue,
     Emilio Jesús Gallego Arias, Michael Sogetrop and Vincent Laporte).
@@ -525,7 +527,13 @@ Other changes in 8.10+beta1
     (`#9829 <https://github.com/coq/coq/pull/9829>`_, by Vincent Laporte).
 
   - :cmd:`Coercion` does not warn ambiguous paths which are obviously
-    convertible with existing ones
+    convertible with existing ones. The ambiguous paths messages have been
+    turned to warnings, thus now they could appear in the output of ``coqc``.
+    The convertibility checking procedure for coercion paths is complete for
+    paths consisting of coercions satisfying the uniform inheritance condition,
+    but some coercion paths could be reported as ambiguous even if they are
+    convertible with existing ones when they have coercions that don't satisfy
+    the uniform inheritance condition
     (`#9743 <https://github.com/coq/coq/pull/9743>`_,
     closes `#3219 <https://github.com/coq/coq/issues/3219>`_,
     by Kazuhiko Sakaguchi).
@@ -595,6 +603,120 @@ Other changes in 8.10+beta1
   by Théo Zimmermann,
   with help and ideas from Emilio Jesús Gallego Arias, Gaëtan
   Gilbert, Clément Pit-Claudel, Matthieu Sozeau, and Enrico Tassi).
+
+Changes in 8.10+beta2
+~~~~~~~~~~~~~~~~~~~~~
+
+Many bug fixes and documentation improvements, in particular:
+
+**Tactics**
+
+- Make the :tacn:`discriminate` tactic work together with
+  :flag:`Universe Polymorphism` and equality in :g:`Type`. This,
+  in particular, makes :tacn:`discriminate` compatible with the HoTT
+  library https://github.com/HoTT/HoTT
+  (`#10205 <https://github.com/coq/coq/pull/10205>`_,
+  by Andreas Lynge, review by Pierre-Marie Pédrot and Matthieu Sozeau).
+
+**SSReflect**
+
+- Make the ``case E: t`` tactic work together with
+  :flag:`Universe Polymorphism` and equality in :g:`Type`.
+  This makes :tacn:`case <case (ssreflect)>` compatible with the HoTT
+  library https://github.com/HoTT/HoTT
+  (`#10302 <https://github.com/coq/coq/pull/10302>`_,
+  fixes `#10301 <https://github.com/coq/coq/issues/10301>`_,
+  by Andreas Lynge, review by Enrico Tassi)
+- Make the ``rewrite /t`` tactic work together with
+  :flag:`Universe Polymorphism`.
+  This makes :tacn:`rewrite <rewrite (ssreflect)>` compatible with the HoTT
+  library https://github.com/HoTT/HoTT
+  (`#10305 <https://github.com/coq/coq/pull/10305>`_,
+  fixes `#9336 <https://github.com/coq/coq/issues/9336>`_,
+  by Andreas Lynge, review by Enrico Tassi)
+
+**CoqIDE**
+
+- Fix CoqIDE instability on Windows after the update to gtk3
+  (`#10360 <https://github.com/coq/coq/pull/10360>`_, by Michael Soegtrop,
+  closes `#9885 <https://github.com/coq/coq/issues/9885>`_).
+
+**Miscellaneous**
+
+- Proof General can now display Coq-generated diffs between proof steps
+  in color
+  (`#10019 <https://github.com/coq/coq/pull/10019>`_ and
+  (in Proof General) `#421 <https://github.com/ProofGeneral/PG/pull/421>`_,
+  by Jim Fehrle).
+
+Changes in 8.10+beta3
+~~~~~~~~~~~~~~~~~~~~~
+
+**Kernel**
+
+- Fix soundness issue with template polymorphism (`#9294
+  <https://github.com/coq/coq/issues/9294>`_).
+
+  Declarations of template-polymorphic inductive types ignored the
+  provenance of the universes they were abstracting on and did not
+  detect if they should be greater or equal to :math:`\Set` in
+  general. Previous universes and universes introduced by the inductive
+  definition could have constraints that prevented their instantiation
+  with e.g. :math:`\Prop`, resulting in unsound instantiations later. The
+  implemented fix only allows abstraction over universes introduced by
+  the inductive declaration, and properly records all their constraints
+  by making them by default only :math:`>= \Prop`. It is also checked
+  that a template polymorphic inductive actually is polymorphic on at
+  least one universe.
+
+  This prevents inductive declarations in sections to be universe
+  polymorphic over section parameters. For a backward compatible fix,
+  simply hoist the inductive definition out of the section.
+  An alternative is to declare the inductive as universe-polymorphic and
+  cumulative in a universe-polymorphic section: all universes and
+  constraints will be properly gathered in this case.
+  See :ref:`Template-polymorphism` for a detailed exposition of the
+  rules governing template-polymorphic types.
+
+  To help users incrementally fix this issue, a command line option
+  `-no-template-check` and a global flag :flag:`Template Check` are
+  available to selectively disable the new check. Use at your own risk.
+
+  (`#9918 <https://github.com/coq/coq/pull/9918>`_, by Matthieu Sozeau
+  and Maxime Dénès).
+
+**User messages**
+
+- Improve the ambiguous paths warning to indicate which path is ambiguous with
+  new one
+  (`#10336 <https://github.com/coq/coq/pull/10336>`_,
+  closes `#3219 <https://github.com/coq/coq/issues/3219>`_,
+  by Kazuhiko Sakaguchi).
+
+**Extraction**
+
+- Fix extraction to OCaml of primitive machine integers;
+  see :ref:`primitive-integers`
+  (`#10430 <https://github.com/coq/coq/pull/10430>`_,
+  fixes `#10361 <https://github.com/coq/coq/issues/10361>`_,
+  by Vincent Laporte).
+- Fix a printing bug of OCaml extraction on dependent record projections, which
+  produced improper `assert false`. This change makes the OCaml extractor
+  internally inline record projections by default; thus the monolithic OCaml
+  extraction (:cmd:`Extraction` and :cmd:`Recursive Extraction`) does not
+  produce record projection constants anymore except for record projections
+  explicitly instructed to extract, and records declared in opaque modules
+  (`#10577 <https://github.com/coq/coq/pull/10577>`_,
+  fixes `#7348 <https://github.com/coq/coq/issues/7348>`_,
+  by Kazuhiko Sakaguchi).
+
+**Standard library**
+
+- Added ``splitat`` function and lemmas about ``splitat`` and ``uncons``
+  (`#9379 <https://github.com/coq/coq/pull/9379>`_,
+  by Yishuai Li, with help of Konstantinos Kallas,
+  follow-up of `#8365 <https://github.com/coq/coq/pull/8365>`_,
+  which added ``uncons`` in 8.10+beta1).
 
 Version 8.9
 -----------
@@ -840,8 +962,8 @@ Standard Library
   and other packages.  They are still delimited by `%int` and `%uint`.
 
 - Syntax notations for `string`, `ascii`, `Z`, `positive`, `N`, `R`,
-  and `int31` are no longer available merely by `Require`ing the files
-  that define the inductives.  You must `Import` `Coq.Strings.String.StringSyntax`
+  and `int31` are no longer available merely by :cmd:`Require`\ing the files
+  that define the inductives.  You must :cmd:`Import` `Coq.Strings.String.StringSyntax`
   (after `Require` `Coq.Strings.String`), `Coq.Strings.Ascii.AsciiSyntax` (after
   `Require` `Coq.Strings.Ascii`), `Coq.ZArith.BinIntDef`, `Coq.PArith.BinPosDef`,
   `Coq.NArith.BinNatDef`, `Coq.Reals.Rdefinitions`, and
@@ -956,6 +1078,19 @@ Notations
   and `vector_scope` both open with `vector_scope` on top, and expect `++` to
   refer to `app`.
   Solution: wrap `_ ++ _` in `(_ ++ _)%list` (or whichever scope you want).
+
+Changes in 8.8.0
+~~~~~~~~~~~~~~~~
+
+Various bug fixes.
+
+Changes in 8.8.1
+~~~~~~~~~~~~~~~~
+
+- Some quality-of-life fixes.
+- Numerous improvements to the documentation.
+- Fix a critical bug related to primitive projections and :tacn:`native_compute`.
+- Ship several additional Coq libraries with the Windows installer.
 
 Version 8.8
 -----------

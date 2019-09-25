@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -9,81 +9,138 @@
 (************************************************************************)
 
 open Names
-open Decl_kinds
 
-type declaration_hook
+(** {4 Proofs attached to a constant} *)
 
-(* Hooks allow users of the API to perform arbitrary actions at
- * proof/definition saving time. For example, to register a constant
- * as a Coercion, perform some cleanup, update the search database,
- * etc...
- *
- * Here, we use an extended hook type suitable for obligations /
- * equations.
- *)
-(** [hook_type] passes to the client:
-    - [ustate]: universe constraints obtained when the term was closed
-    - [(n1,t1),...(nm,tm)]: association list between obligation
-        name and the corresponding defined term (might be a constant,
-        but also an arbitrary term in the Expand case of obligations)
-    - [locality]: Locality of the original declaration
-    - [ref]: identifier of the origianl declaration
- *)
-type hook_type = UState.t -> (Id.t * Constr.t) list -> Decl_kinds.locality -> GlobRef.t -> unit
+type t
+(** [Lemmas.t] represents a constant that is being proved, usually
+    interactively *)
 
-val mk_hook : hook_type -> declaration_hook
-val call_hook
-  :  ?hook:declaration_hook
-  -> ?fix_exn:Future.fix_exn
-  -> hook_type
+val set_endline_tactic : Genarg.glob_generic_argument -> t -> t
+(** [set_endline_tactic tac lemma] set ending tactic for [lemma] *)
 
-val start_proof : Id.t -> ?pl:UState.universe_decl -> goal_kind -> Evd.evar_map ->
-  ?terminator:(?hook:declaration_hook -> Proof_global.lemma_possible_guards -> Proof_global.proof_terminator) ->
-  ?sign:Environ.named_context_val ->
-  ?compute_guard:Proof_global.lemma_possible_guards ->
-  ?hook:declaration_hook -> EConstr.types -> Proof_global.t
+val pf_map : (Proof_global.t -> Proof_global.t) -> t -> t
+(** [pf_map f l] map the underlying proof object *)
 
-val start_proof_com
+val pf_fold : (Proof_global.t -> 'a) -> t -> 'a
+(** [pf_fold f l] fold over the underlying proof object *)
+
+val by : unit Proofview.tactic -> t -> t * bool
+(** [by tac l] apply a tactic to [l] *)
+
+(** Creating high-level proofs with an associated constant *)
+module Proof_ending : sig
+
+  type t =
+    | Regular
+    | End_obligation of DeclareObl.obligation_qed_info
+    | End_derive of { f : Id.t; name : Id.t }
+    | End_equations of { hook : Constant.t list -> Evd.evar_map -> unit
+                       ; i : Id.t
+                       ; types : (Environ.env * Evar.t * Evd.evar_info * EConstr.named_context * Evd.econstr) list
+                       ; wits : EConstr.t list ref
+                       ; sigma : Evd.evar_map
+                       }
+
+end
+
+module Recthm : sig
+  type t =
+    { name : Id.t
+    (** Name of theorem *)
+    ; typ : EConstr.t
+    (** Type of theorem  *)
+    ; args : Name.t list
+    (** Names to pre-introduce  *)
+    ; impargs : Impargs.manual_implicits
+    (** Explicitily declared implicit arguments  *)
+    }
+end
+
+module Info : sig
+
+  type t
+
+  val make
+    :  ?hook: DeclareDef.Hook.t
+    (** Callback to be executed at the end of the proof *)
+    -> ?proof_ending : Proof_ending.t
+    (** Info for special constants *)
+    -> ?scope : DeclareDef.locality
+    (** locality  *)
+    -> ?kind:Decls.logical_kind
+    (** Theorem, etc... *)
+    -> unit
+    -> t
+
+end
+
+(** Starts the proof of a constant *)
+val start_lemma
+  :  name:Id.t
+  -> poly:bool
+  -> ?udecl:UState.universe_decl
+  -> ?info:Info.t
+  -> Evd.evar_map
+  -> EConstr.types
+  -> t
+
+val start_dependent_lemma
+  :  name:Id.t
+  -> poly:bool
+  -> ?udecl:UState.universe_decl
+  -> ?info:Info.t
+  -> Proofview.telescope
+  -> t
+
+type lemma_possible_guards = int list list
+
+(** Pretty much internal, only used in ComFixpoint *)
+val start_lemma_with_initialization
+  :  ?hook:DeclareDef.Hook.t
+  -> poly:bool
+  -> scope:DeclareDef.locality
+  -> kind:Decls.logical_kind
+  -> udecl:UState.universe_decl
+  -> Evd.evar_map
+  -> (bool * lemma_possible_guards * unit Proofview.tactic list option) option
+  -> Recthm.t list
+  -> int list option
+  -> t
+
+val default_thm_id : Names.Id.t
+
+(** Main [Lemma foo args : type.] command *)
+val start_lemma_com
   :  program_mode:bool
+  -> poly:bool
+  -> scope:DeclareDef.locality
+  -> kind:Decls.logical_kind
   -> ?inference_hook:Pretyping.inference_hook
-  -> ?hook:declaration_hook -> goal_kind -> Vernacexpr.proof_expr list
-  -> Proof_global.t
+  -> ?hook:DeclareDef.Hook.t
+  -> Vernacexpr.proof_expr list
+  -> t
 
-val start_proof_with_initialization :
-  ?hook:declaration_hook ->
-  goal_kind -> Evd.evar_map -> UState.universe_decl ->
-  (bool * Proof_global.lemma_possible_guards * unit Proofview.tactic list option) option ->
-  (Id.t (* name of thm *) *
-     (EConstr.types (* type of thm *) * (Name.t list (* names to pre-introduce *) * Impargs.manual_explicitation list))) list
-  -> int list option -> Proof_global.t
+(** {4 Saving proofs} *)
 
-val standard_proof_terminator :
-  ?hook:declaration_hook -> Proof_global.lemma_possible_guards ->
-  Proof_global.proof_terminator
-
-val fresh_name_for_anonymous_theorem : unit -> Id.t
-
-(* Prepare global named context for proof session: remove proofs of
-   opaque section definitions and remove vm-compiled code *)
-
-val initialize_named_context_for_proof : unit -> Environ.named_context_val
-
-(** {6 ... } *)
-
-val save_proof_admitted
-  :  ?proof:Proof_global.closed_proof
-  -> pstate:Proof_global.t
-  -> unit
-
-val save_proof_proved
-  :  ?proof:Proof_global.closed_proof
-  -> ?ontop:Proof_global.stack
+val save_lemma_admitted : lemma:t -> unit
+val save_lemma_proved
+  :  lemma:t
   -> opaque:Proof_global.opacity_flag
   -> idopt:Names.lident option
-  -> Proof_global.stack option
+  -> unit
 
-val save_pstate_proved
-  : pstate:Proof_global.t
-  -> opaque:Proof_global.opacity_flag
+(** To be removed, don't use! *)
+module Internal : sig
+  val get_info : t -> Info.t
+  (** Only needed due to the Proof_global compatibility layer. *)
+end
+
+(** Special cases for delayed proofs, in this case we must provide the
+   proof information so the proof won't be forced. *)
+val save_lemma_admitted_delayed : proof:Proof_global.proof_object -> info:Info.t -> unit
+val save_lemma_proved_delayed
+  :  proof:Proof_global.proof_object
+  -> info:Info.t
   -> idopt:Names.lident option
   -> unit

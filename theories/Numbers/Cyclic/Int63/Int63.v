@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -388,7 +388,7 @@ Axiom diveucl_def_spec : forall x y, diveucl x y = diveucl_def x y.
 Axiom diveucl_21_spec :  forall a1 a2 b,
    let (q,r) := diveucl_21 a1 a2 b in
    let (q',r') := Z.div_eucl ([|a1|] * wB + [|a2|]) [|b|] in
-   [|q|] = Z.modulo q' wB /\ [|r|] = r'.
+   [|a1|] < [|b|] -> [|q|] = q' /\ [|r|] = r'.
 
 Axiom addmuldiv_def_spec : forall p x y,
   addmuldiv p x y = addmuldiv_def p x y.
@@ -812,14 +812,6 @@ Proof.
  eapply Z.lt_le_trans; [ | apply Zpower2_le_lin ]; auto with zarith.
 Qed.
 
-Lemma lsr_add_distr x y n: (x + y) << n = ((x << n) + (y << n))%int63.
-Proof.
- apply to_Z_inj.
- rewrite -> add_spec, !lsl_spec, add_spec.
- rewrite -> Zmult_mod_idemp_l, <-Zplus_mod.
- apply f_equal2 with (f := Zmod); auto with zarith.
-Qed.
-
 (* LSL *)
 Lemma lsl0 i: 0 << i = 0%int63.
 Proof.
@@ -1119,7 +1111,7 @@ Proof.
  generalize (add_le_r x y); rewrite Heq, lor_le; intro Hb.
  generalize Heq; rewrite (bit_split x) at 1; rewrite (bit_split y )at 1; clear Heq.
  rewrite (fun y => add_comm y (bit x 0)), <-!add_assoc, add_comm,
-         <-!add_assoc, (add_comm (bit y 0)), add_assoc, <-lsr_add_distr.
+         <-!add_assoc, (add_comm (bit y 0)), add_assoc, <-lsl_add_distr.
  rewrite (bit_split (x lor y)), lor_spec.
  intros Heq.
  assert (F: (bit x 0 + bit y 0)%int63 = (bit x 0 || bit y 0)).
@@ -1429,26 +1421,9 @@ Proof.
  generalize (Z_div_mod ([|a1|]*wB+[|a2|]) [|b|] H).
  revert W.
  destruct (diveucl_21 a1 a2 b); destruct (Z.div_eucl ([|a1|]*wB+[|a2|]) [|b|]).
- intros (H', H''); rewrite H', H''; clear H' H''.
+ intros (H', H''); auto; rewrite H', H''; clear H' H''.
  intros (H', H''); split; [ |exact H''].
- rewrite H', Zmult_comm, Z.mod_small; [reflexivity| ].
- split.
- { revert H'; case z; [now simpl..|intros p H'].
-   exfalso; apply (Z.lt_irrefl 0), (Z.le_lt_trans _ ([|a1|] * wB + [|a2|])).
-   { now apply Z.add_nonneg_nonneg; [apply Z.mul_nonneg_nonneg| ]. }
-   rewrite H'; apply (Zplus_lt_reg_r _ _ (- z0)); ring_simplify.
-   apply (Z.le_lt_trans _ (- [|b|])); [ |now auto with zarith].
-   rewrite Z.opp_eq_mul_m1; apply Zmult_le_compat_l; [ |now apply Wb].
-   rewrite <-!Pos2Z.opp_pos, <-Z.opp_le_mono.
-   now change 1 with (Z.succ 0); apply Zlt_le_succ. }
- rewrite <-Z.nle_gt; intro Hz; revert H2; apply Zle_not_lt.
- rewrite (Z.div_unique_pos (wB * [|a1|] + [|a2|]) wB [|a1|] [|a2|]);
-   [ |now simpl..].
- rewrite Z.mul_comm, H'.
- rewrite (Z.div_unique_pos (wB * [|b|] + z0) wB [|b|] z0) at 1;
-   [ |split; [ |apply (Z.lt_trans _ [|b|])]; now simpl|reflexivity].
- apply Z_div_le; [now simpl| ]; rewrite Z.mul_comm; apply Zplus_le_compat_r.
- now apply Zmult_le_compat_l.
+ now rewrite H', Zmult_comm.
 Qed.
 
 Lemma div2_phi ih il j: (2^62 <= [|j|] -> [|ih|] < [|j|] ->

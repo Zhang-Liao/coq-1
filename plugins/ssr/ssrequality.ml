@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -109,6 +109,11 @@ let congrtac ((n, t), ty) ist gl =
       loop 1 in
   tclTHEN (refine_with cf) (tclTRY (Proofview.V82.of_tactic Tactics.reflexivity)) gl
 
+let pf_typecheck t gl =
+  let it = sig_it gl in
+  let sigma,_  = pf_type_of gl t in
+  re_sig [it] sigma
+
 let newssrcongrtac arg ist gl =
   ppdebug(lazy Pp.(str"===newcongr==="));
   ppdebug(lazy Pp.(str"concl=" ++ Printer.pr_econstr_env (pf_env gl) (project gl) (pf_concl gl)));
@@ -128,17 +133,23 @@ let newssrcongrtac arg ist gl =
     x, re_sig si sigma in
   let arr, gl = pf_mkSsrConst "ssr_congr_arrow" gl in
   let ssr_congr lr = EConstr.mkApp (arr, lr) in
+  let eq, gl = pf_fresh_global Coqlib.(lib_ref "core.eq.type") gl in
   (* here the two cases: simple equality or arrow *)
-  let equality, _, eq_args, gl' =
-    let eq, gl = pf_fresh_global Coqlib.(lib_ref "core.eq.type") gl in
-    pf_saturate gl (EConstr.of_constr eq) 3 in
+  let equality, _, eq_args, gl' = pf_saturate gl (EConstr.of_constr eq) 3 in
   tclMATCH_GOAL (equality, gl') (fun gl' -> fs gl' (List.assoc 0 eq_args))
   (fun ty -> congrtac (arg, Detyping.detype Detyping.Now false Id.Set.empty (pf_env gl) (project gl) ty) ist)
   (fun () ->
-    let lhs, gl' = mk_evar gl EConstr.mkProp in let rhs, gl' = mk_evar gl' EConstr.mkProp in
+    let gl', t_lhs = pfe_new_type gl in
+    let gl', t_rhs = pfe_new_type gl' in
+    let lhs, gl' = mk_evar gl' t_lhs in
+    let rhs, gl' = mk_evar gl' t_rhs in
     let arrow = EConstr.mkArrow lhs Sorts.Relevant (EConstr.Vars.lift 1 rhs) in
     tclMATCH_GOAL (arrow, gl') (fun gl' -> [|fs gl' lhs;fs gl' rhs|])
-    (fun lr -> tclTHEN (Proofview.V82.of_tactic (Tactics.apply (ssr_congr lr))) (congrtac (arg, mkRType) ist))
+    (fun lr ->
+      let a = ssr_congr lr in
+      tclTHENLIST [ pf_typecheck a
+                  ; Proofview.V82.of_tactic (Tactics.apply a)
+                  ; congrtac (arg, mkRType) ist ])
     (fun _ _ -> errorstrm Pp.(str"Conclusion is not an equality nor an arrow")))
     gl
 
@@ -336,17 +347,21 @@ let pirrel_rewrite ?(under=false) ?(map_redex=id_map_redex) pred rdx rdx_ty new_
   let sigma, p = (* The resulting goal *)
     Evarutil.new_evar env sigma (beta (EConstr.Vars.subst1 new_rdx pred)) in
   let pred = EConstr.mkNamedLambda (make_annot pattern_id Sorts.Relevant) rdx_ty pred in
-  let elim, gl = 
-    let ((kn, i) as ind, _), unfolded_c_ty = pf_reduce_to_quantified_ind gl c_ty in
+  let sigma, elim =
     let sort = elimination_sort_of_goal gl in
-    let elim, gl = pf_fresh_global (Indrec.lookup_eliminator env ind sort) gl in
-    if dir = R2L then elim, gl else (* taken from Coq's rewrite *)
-    let elim, _ = destConst elim in
-    let mp,l = Constant.repr2 (Constant.make1 (Constant.canonical elim)) in
-    let l' = Label.of_id (Nameops.add_suffix (Label.to_id l) "_r")  in 
-    let c1' = Global.constant_of_delta_kn (Constant.canonical (Constant.make2 mp l')) in
-    mkConst c1', gl in
-  let elim = EConstr.of_constr elim in
+    match Equality.eq_elimination_ref (dir = L2R) sort with
+    | Some r -> Evd.fresh_global env sigma r
+    | None ->
+      let ((kn, i) as ind, _), unfolded_c_ty = Tacred.reduce_to_quantified_ind env sigma c_ty in
+      let sort = elimination_sort_of_goal gl in
+      let sigma, elim = Evd.fresh_global env sigma (Indrec.lookup_eliminator env ind sort) in
+      if dir = R2L then sigma, elim else
+      let elim, _ = EConstr.destConst sigma elim in
+      let mp,l = Constant.repr2 (Constant.make1 (Constant.canonical elim)) in
+      let l' = Label.of_id (Nameops.add_suffix (Label.to_id l) "_r")  in
+      let c1' = Global.constant_of_delta_kn (Constant.canonical (Constant.make2 mp l')) in
+      sigma, EConstr.of_constr (mkConst c1')
+  in
   let proof = EConstr.mkApp (elim, [| rdx_ty; new_rdx; pred; p; rdx; c |]) in
   (* We check the proof is well typed *)
   let sigma, proof_ty =
@@ -491,7 +506,8 @@ let rwprocess_rule dir rule gl =
           | _ ->
             let sigma, pi2 = Evd.fresh_global env sigma coq_prod.Coqlib.proj2 in
             EConstr.mkApp (pi2, ra), sigma in
-        if EConstr.eq_constr sigma a.(0) (EConstr.of_constr (UnivGen.constr_of_monomorphic_global @@ Coqlib.(lib_ref "core.True.type"))) then
+        let sigma,trty = Evd.fresh_global env sigma Coqlib.(lib_ref "core.True.type") in
+        if EConstr.eq_constr sigma a.(0) trty then
          let s, sigma = sr sigma 2 in
          loop (converse_dir d) sigma s a.(1) rs 0
         else
@@ -619,7 +635,11 @@ let rwargtac ?under ?map_redex ist ((dir, mult), (((oclr, occ), grx), (kind, gt)
     with _ when snd mult = May -> fail := true; (project gl, EConstr.mkProp) in
   let rwtac gl = 
     let rx = Option.map (interp_rpattern gl) grx in
+    let gl = match rx with
+      | None -> gl
+      | Some (s,_) -> pf_merge_uc_of s gl in
     let t = interp gt gl in
+    let gl = pf_merge_uc_of (fst t) gl in
     (match kind with
     | RWred sim -> simplintac occ rx sim
     | RWdef -> if dir = R2L then foldtac occ rx t else unfoldintac occ rx t gt

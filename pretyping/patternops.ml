@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -18,7 +18,6 @@ open Context
 open Glob_term
 open Pp
 open Mod_subst
-open Decl_kinds
 open Pattern
 open Environ
 
@@ -132,7 +131,7 @@ let rec head_pattern_bound t =
     | PIf (c,_,_)  -> head_pattern_bound c
     | PCase (_,p,c,br) -> head_pattern_bound c
     | PRef r         -> r
-    | PVar id        -> VarRef id
+    | PVar id        -> GlobRef.VarRef id
     | PEvar _ | PRel _ | PMeta _ | PSoApp _  | PSort _ | PFix _ | PProj _
 	-> raise BoundPattern
     (* Perhaps they were arguments, but we don't beta-reduce *)
@@ -140,10 +139,10 @@ let rec head_pattern_bound t =
     | PCoFix _ | PInt _ -> anomaly ~label:"head_pattern_bound" (Pp.str "not a type.")
 
 let head_of_constr_reference sigma c = match EConstr.kind sigma c with
-  | Const (sp,_) -> ConstRef sp
-  | Construct (sp,_) -> ConstructRef sp
-  | Ind (sp,_) -> IndRef sp
-  | Var id -> VarRef id
+  | Const (sp,_) -> GlobRef.ConstRef sp
+  | Construct (sp,_) -> GlobRef.ConstructRef sp
+  | Ind (sp,_) -> GlobRef.IndRef sp
+  | Var id -> GlobRef.VarRef id
   | _ -> anomaly (Pp.str "Not a rigid reference.")
 
 let pattern_of_constr env sigma t =
@@ -175,9 +174,9 @@ let pattern_of_constr env sigma t =
          with
          | Some n -> PSoApp (n,Array.to_list (Array.map (pattern_of_constr env) a))
          | None -> PApp (pattern_of_constr env f,Array.map (pattern_of_constr env) a))
-    | Const (sp,u)  -> PRef (ConstRef (Constant.make1 (Constant.canonical sp)))
-    | Ind (sp,u)    -> PRef (canonical_gr (IndRef sp))
-    | Construct (sp,u) -> PRef (canonical_gr (ConstructRef sp))
+    | Const (sp,u)  -> PRef (GlobRef.ConstRef (Constant.make1 (Constant.canonical sp)))
+    | Ind (sp,u)    -> PRef (canonical_gr (GlobRef.IndRef sp))
+    | Construct (sp,u) -> PRef (canonical_gr (GlobRef.ConstructRef sp))
     | Proj (p, c) -> 
       pattern_of_constr env (EConstr.Unsafe.to_constr (Retyping.expand_projection env sigma p (EConstr.of_constr c) []))
     | Evar (evk,ctxt as ev) ->
@@ -410,7 +409,9 @@ let rec pat_of_raw metas vars = DAst.with_loc_val (fun ?loc -> function
       PLetIn (na, pat_of_raw metas vars c1,
                Option.map (pat_of_raw metas vars) t,
 	       pat_of_raw metas (na::vars) c2)
-  | GSort gs -> PSort (Glob_ops.glob_sort_family gs)
+  | GSort gs ->
+     (try PSort (Glob_ops.glob_sort_family gs)
+      with Glob_ops.ComplexSort -> user_err ?loc (str "Unexpected universe in pattern."))
   | GHole _ ->
       PMeta None
   | GCast (c,_) ->

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -14,7 +14,6 @@ open Declarations
 open Names
 open ModPath
 open Libnames
-open Globnames
 open Pp
 open CErrors
 open Util
@@ -29,24 +28,27 @@ open Common
 
 let toplevel_env () =
   let get_reference = function
-    | (_,kn), Lib.Leaf o ->
-        let mp,l = KerName.repr kn in
-	begin match Libobject.object_tag o with
-	  | "CONSTANT" ->
-            let constant = Global.lookup_constant (Constant.make1 kn) in
-            Some (l, SFBconst constant)
-	  | "INDUCTIVE" ->
-            let inductive = Global.lookup_mind (MutInd.make1 kn) in
-            Some (l, SFBmind inductive)
-	  | "MODULE" ->
-            let modl = Global.lookup_module (MPdot (mp, l)) in
-            Some (l, SFBmodule modl)
-	  | "MODULE TYPE" ->
-            let modtype = Global.lookup_modtype (MPdot (mp, l)) in
-            Some (l, SFBmodtype modtype)
-          | "INCLUDE" -> user_err Pp.(str "No extraction of toplevel Include yet.")
-	  | _ -> None
-        end
+    | (_,kn), Lib.Leaf Libobject.AtomicObject o ->
+      let mp,l = KerName.repr kn in
+            begin match Libobject.object_tag o with
+            | "CONSTANT" ->
+        let constant = Global.lookup_constant (Constant.make1 kn) in
+        Some (l, SFBconst constant)
+            | "INDUCTIVE" ->
+        let inductive = Global.lookup_mind (MutInd.make1 kn) in
+        Some (l, SFBmind inductive)
+            | _ -> None
+      end
+    | (_,kn), Lib.Leaf Libobject.ModuleObject _ ->
+      let mp,l = KerName.repr kn in
+      let modl = Global.lookup_module (MPdot (mp, l)) in
+      Some (l, SFBmodule modl)
+    | (_,kn), Lib.Leaf Libobject.ModuleTypeObject _ ->
+      let mp,l = KerName.repr kn in
+      let modtype = Global.lookup_modtype (MPdot (mp, l)) in
+      Some (l, SFBmodtype modtype)
+    | (_,kn), Lib.Leaf Libobject.IncludeObject _ ->
+      user_err Pp.(str "No extraction of toplevel Include yet.")
     | _ -> None
   in
   List.rev (List.map_filter get_reference (Lib.contents ()))
@@ -115,7 +117,7 @@ module Visit : VISIT = struct
     v.mp <- MPset.union (prefixes_mp mp) v.mp;
     v.mp_all <- MPset.add mp v.mp_all
   let add_kn kn = v.kn <- KNset.add kn v.kn; add_mp (KerName.modpath kn)
-  let add_ref = function
+  let add_ref = let open GlobRef in function
     | ConstRef c -> add_kn (Constant.user c)
     | IndRef (ind,_) | ConstructRef ((ind,_),_) -> add_kn (MutInd.user ind)
     | VarRef _ -> assert false
@@ -645,7 +647,6 @@ let separate_extraction lr =
     is \verb!Extraction! [qualid]. *)
 
 let simple_extraction r =
-  Vernacentries.dump_global CAst.(make (Constrexpr.AN r));
   match locate_ref [r] with
   | ([], [mp]) as p -> full_extr None p
   | [r],[] ->
@@ -752,14 +753,14 @@ let extract_and_compile l =
 (* Show the extraction of the current ongoing proof *)
 let show_extraction ~pstate =
   init ~inner:true false false;
-  let prf = Proof_global.give_me_the_proof pstate in
+  let prf = Proof_global.get_proof pstate in
   let sigma, env = Pfedit.get_current_context pstate in
   let trms = Proof.partial_proof prf in
   let extr_term t =
     let ast, ty = extract_constr env sigma t in
     let mp = Lib.current_mp () in
-    let l = Label.of_id (Proof_global.get_current_proof_name pstate) in
-    let fake_ref = ConstRef (Constant.make2 mp l) in
+    let l = Label.of_id (Proof_global.get_proof_name pstate) in
+    let fake_ref = GlobRef.ConstRef (Constant.make2 mp l) in
     let decl = Dterm (fake_ref, ast, ty) in
     print_one_decl [] mp decl
   in

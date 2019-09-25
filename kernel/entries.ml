@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -57,18 +57,15 @@ type mutual_inductive_entry = {
 }
 
 (** {6 Constants (Definition/Axiom) } *)
-type 'a proof_output = constr Univ.in_universe_context_set * 'a
-type 'a const_entry_body = 'a proof_output Future.computation
 
-type 'a definition_entry = {
-  const_entry_body   : 'a const_entry_body;
+type definition_entry = {
+  const_entry_body : constr;
   (* List of section variables *)
   const_entry_secctx : Constr.named_context option;
   (* State id on which the completion of type checking is reported *)
   const_entry_feedback : Stateid.t option;
-  const_entry_type        : types option;
-  const_entry_universes   : universes_entry;
-  const_entry_opaque      : bool;
+  const_entry_type : types option;
+  const_entry_universes : universes_entry;
   const_entry_inline_code : bool }
 
 type section_def_entry = {
@@ -76,6 +73,16 @@ type section_def_entry = {
   secdef_secctx : Constr.named_context option;
   secdef_feedback : Stateid.t option;
   secdef_type : types option;
+}
+
+type 'a opaque_entry = {
+  opaque_entry_body   : 'a;
+  (* List of section variables *)
+  opaque_entry_secctx : Constr.named_context;
+  (* State id on which the completion of type checking is reported *)
+  opaque_entry_feedback : Stateid.t option;
+  opaque_entry_type        : types;
+  opaque_entry_universes   : universes_entry;
 }
 
 type inline = int option (* inlining level, None for no inlining *)
@@ -89,10 +96,17 @@ type primitive_entry = {
   prim_entry_content : CPrimitives.op_or_type;
 }
 
-type 'a constant_entry =
-  | DefinitionEntry of 'a definition_entry
-  | ParameterEntry of parameter_entry
-  | PrimitiveEntry of primitive_entry
+type 'a proof_output = constr Univ.in_universe_context_set * 'a
+type 'a const_entry_body = 'a proof_output Future.computation
+
+(** Dummy wrapper type discriminable from unit *)
+type 'a seff_wrap = { seff_wrap : 'a }
+
+type _ constant_entry =
+  | DefinitionEntry : definition_entry -> unit constant_entry
+  | OpaqueEntry : 'a const_entry_body opaque_entry -> 'a seff_wrap constant_entry
+  | ParameterEntry : parameter_entry -> unit constant_entry
+  | PrimitiveEntry : primitive_entry -> unit constant_entry
 
 (** {6 Modules } *)
 
@@ -107,8 +121,3 @@ type module_entry =
   | MType of module_params_entry * module_struct_entry
   | MExpr of
       module_params_entry * module_struct_entry * module_struct_entry option
-
-(** Not used by the kernel. *)
-type side_effect_role =
-  | Subproof
-  | Schema of inductive * string

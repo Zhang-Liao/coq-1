@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -25,7 +25,6 @@ open Tacmach
 open Tactics
 open Clenv
 open Typeclasses
-open Globnames
 open Evd
 open Locus
 open Proofview.Notations
@@ -152,7 +151,7 @@ let pr_ev evs ev =
 open Auto
 open Unification
 
-let auto_core_unif_flags st freeze = {
+let auto_core_unif_flags st allowed_evars = {
   modulo_conv_on_closed_terms = Some st;
   use_metas_eagerly_in_conv_on_closed_terms = true;
   use_evars_eagerly_in_conv_on_closed_terms = false;
@@ -161,14 +160,14 @@ let auto_core_unif_flags st freeze = {
   check_applied_meta_types = false;
   use_pattern_unification = true;
   use_meta_bound_pattern_unification = true;
-  frozen_evars = freeze;
+  allowed_evars;
   restrict_conv_on_strict_subterms = false; (* ? *)
   modulo_betaiota = true;
   modulo_eta = false;
 }
 
-let auto_unif_flags freeze st =
-  let fl = auto_core_unif_flags st freeze in
+let auto_unif_flags ?(allowed_evars = AllowAll) st =
+  let fl = auto_core_unif_flags st allowed_evars in
   { core_unify_flags = fl;
     merge_unify_flags = fl;
     subterm_unify_flags = fl;
@@ -204,11 +203,11 @@ let clenv_unique_resolver_tac with_evars ~flags clenv' =
   end
 
 let unify_e_resolve poly flags = begin fun gls (c,_,clenv) ->
-  let clenv', c = connect_hint_clenv poly c clenv gls in
+  let clenv', c = connect_hint_clenv ~poly c clenv gls in
   clenv_unique_resolver_tac true ~flags clenv' end
 
 let unify_resolve poly flags = begin fun gls (c,_,clenv) ->
-  let clenv', _ = connect_hint_clenv poly c clenv gls in
+  let clenv', _ = connect_hint_clenv ~poly c clenv gls in
   clenv_unique_resolver_tac false ~flags clenv'
   end
 
@@ -257,7 +256,7 @@ let clenv_of_prods poly nprods (c, clenv) gl =
     let sigma = Tacmach.New.project gl in
     let ty = Retyping.get_type_of (Proofview.Goal.env gl) sigma c in
     let diff = nb_prod sigma ty - nprods in
-    if Pervasives.(>=) diff 0 then
+    if (>=) diff 0 then
       (* Was Some clenv... *)
       Some (Some diff,
             mk_clenv_from_n gl (Some diff) (c,ty))
@@ -358,23 +357,25 @@ and e_my_find_search db_list local_db secvars hdc complete only_classes env sigm
   let open Proofview.Notations in
   let prods, concl = EConstr.decompose_prod_assum sigma concl in
   let nprods = List.length prods in
-  let freeze =
+  let allowed_evars =
     try
       match hdc with
       | Some (hd,_) when only_classes ->
          let cl = Typeclasses.class_info env sigma hd in
          if cl.cl_strict then
-           Evarutil.undefined_evars_of_term sigma concl
-         else Evar.Set.empty
-      | _ -> Evar.Set.empty
-    with e when CErrors.noncritical e -> Evar.Set.empty
+          let undefined = lazy (Evarutil.undefined_evars_of_term sigma concl) in
+          let allowed evk = not (Evar.Set.mem evk (Lazy.force undefined)) in
+          AllowFun allowed
+         else AllowAll
+      | _ -> AllowAll
+    with e when CErrors.noncritical e -> AllowAll
   in
   let hint_of_db = hintmap_of sigma hdc secvars concl in
   let hintl =
     List.map_append
       (fun db ->
         let tacs = hint_of_db db in
-        let flags = auto_unif_flags freeze (Hint_db.transparent_state db) in
+        let flags = auto_unif_flags ~allowed_evars (Hint_db.transparent_state db) in
           List.map (fun x -> (flags, x)) tacs)
       (local_db::db_list)
   in
@@ -517,8 +518,8 @@ let make_resolve_hyp env sigma st flags only_classes pri decl =
   let rec iscl env ty =
     let ctx, ar = decompose_prod_assum sigma ty in
       match EConstr.kind sigma (fst (decompose_app sigma ar)) with
-      | Const (c,_) -> is_class (ConstRef c)
-      | Ind (i,_) -> is_class (IndRef i)
+      | Const (c,_) -> is_class (GlobRef.ConstRef c)
+      | Ind (i,_) -> is_class (GlobRef.IndRef i)
       | _ ->
           let env' = push_rel_context ctx env in
           let ty' = Reductionops.whd_all env' sigma ar in
@@ -529,14 +530,14 @@ let make_resolve_hyp env sigma st flags only_classes pri decl =
   let keep = not only_classes || is_class in
     if keep then
       let c = mkVar id in
-      let name = PathHints [VarRef id] in
+      let name = PathHints [GlobRef.VarRef id] in
       let hints =
         if is_class then
-          let hints = build_subclasses ~check:false env sigma (VarRef id) empty_hint_info in
+          let hints = build_subclasses ~check:false env sigma (GlobRef.VarRef id) empty_hint_info in
             (List.map_append
              (fun (path,info,c) ->
               make_resolves env sigma ~name:(PathHints path)
-                  (true,false,not !Flags.quiet) info false
+                  (true,false,not !Flags.quiet) info ~poly:false
                  (IsConstr (EConstr.of_constr c,Univ.ContextSet.empty)))
                hints)
         else []
@@ -544,8 +545,8 @@ let make_resolve_hyp env sigma st flags only_classes pri decl =
         (hints @ List.map_filter
          (fun f -> try Some (f (c, cty, Univ.ContextSet.empty))
            with Failure _ | UserError _ -> None)
-         [make_exact_entry ~name env sigma pri false;
-          make_apply_entry ~name env sigma flags pri false])
+         [make_exact_entry ~name env sigma pri ~poly:false;
+          make_apply_entry ~name env sigma flags pri ~poly:false])
     else []
 
 let make_hints g (modes,st) only_classes sign =
@@ -1199,7 +1200,7 @@ let autoapply c i =
   let hintdb = try Hints.searchtable_map i with Not_found ->
     CErrors.user_err (Pp.str ("Unknown hint database " ^ i ^ "."))
   in
-  let flags = auto_unif_flags Evar.Set.empty
+  let flags = auto_unif_flags
     (Hints.Hint_db.transparent_state hintdb) in
   let cty = Tacmach.New.pf_unsafe_type_of gl c in
   let ce = mk_clenv_from gl (c,cty) in

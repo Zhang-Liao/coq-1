@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -34,6 +34,8 @@ module AsyncOpts : sig
     async_proofs_tac_error_resilience : tac_error_filter;
     async_proofs_cmd_error_resilience : bool;
     async_proofs_delegation_threshold : float;
+
+    async_proofs_worker_priority : CoqworkmgrApi.priority;
   }
 
   val default_opts : stm_opt
@@ -119,6 +121,8 @@ the specified state AND that has differences in the underlying proof (i.e.,
 ignoring proofview-only changes).  Used to compute proof diffs. *)
 val get_prev_proof : doc:doc -> Stateid.t -> Proof.t option
 
+val get_proof : doc:doc -> Stateid.t -> Proof.t option
+
 (* [query at ?report_with cmd] Executes [cmd] at a given state [at],
    throwing away side effects except messages. Feedback will
    be sent with [report_with], which defaults to the dummy state id *)
@@ -167,7 +171,7 @@ type tasks
 val check_task : string -> tasks -> int -> bool
 val info_tasks : tasks -> (string * float * int) list
 val finish_tasks : string ->
-  Library.seg_univ -> Library.seg_discharge -> Library.seg_proofs ->
+  Library.seg_univ -> Library.seg_proofs ->
     tasks -> Library.seg_univ * Library.seg_proofs
 
 (* Id of the tip of the current branch *)

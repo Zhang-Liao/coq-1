@@ -1,6 +1,6 @@
 ##########################################################################
 ##         #   The Coq Proof Assistant / The Coq Development Team       ##
-##  v      #   INRIA, CNRS and contributors - Copyright 1999-2018       ##
+##  v      #   INRIA, CNRS and contributors - Copyright 1999-2019       ##
 ## <O___,, #       (see CREDITS file for the list of authors)           ##
 ##   \VV/  ###############################################################
 ##    //   #    This file is distributed under the terms of the         ##
@@ -355,19 +355,49 @@ kernel/copcodes.ml: kernel/genOpcodeFiles.exe
 COQPPCMO := $(addsuffix .cmo, $(addprefix coqpp/, coqpp_parse coqpp_lex))
 
 coqpp/coqpp_parse.cmi: coqpp/coqpp_ast.cmi
+coqpp/coqpp_parser.cmo: coqpp_parser.cmi
 coqpp/coqpp_parse.cmo: coqpp/coqpp_ast.cmi coqpp/coqpp_parse.cmi
 coqpp/coqpp_lex.cmo: coqpp/coqpp_ast.cmi coqpp/coqpp_parse.cmo
 
-$(COQPP): $(COQPPCMO) coqpp/coqpp_main.ml
+$(COQPP): $(COQPPCMO) coqpp/coqpp_parser.mli coqpp/coqpp_parser.ml coqpp/coqpp_main.ml
 	$(SHOW)'OCAMLC -a $@'
 	$(HIDE)$(OCAMLC) -I coqpp $^ -linkall -o $@
+
+DOC_GRAMCMO := $(addsuffix .cmo, $(addprefix coqpp/, coqpp_parse coqpp_lex))
+
+$(DOC_GRAM): $(DOC_GRAMCMO) coqpp/coqpp_parser.mli coqpp/coqpp_parser.ml doc/tools/docgram/doc_grammar.ml
+	$(SHOW)'OCAMLC -a $@'
+	$(HIDE)$(OCAMLC) -I coqpp $^ -package str -linkall -linkpkg -o $@
+
+DOC_MLGS := */*.mlg plugins/*/*.mlg
+DOC_EDIT_MLGS := doc/tools/docgram/*_mlg
+DOC_RSTS := doc/sphinx/*.rst doc/sphinx/*/*.rst
+
+doc/tools/docgram/fullGrammar: $(DOC_GRAM) $(DOC_MLGS)
+	$(SHOW)'DOC_GRAM'
+	$(HIDE)$(DOC_GRAM) -short -no-warn $(DOC_MLGS)
+
+#todo: add a dependency of sphinx on orderedGrammar and of *.rst on orderedGrammar when we're ready
+doc/tools/docgram/orderedGrammar: $(DOC_GRAM) $(DOC_EDIT_MLGS)
+	$(SHOW)'DOC_GRAM_RSTS'
+	$(HIDE)$(DOC_GRAM) $(DOC_MLGS) $(DOC_RSTS)
+
+.PHONY: doc_gram doc_gram_rsts doc_gram_verify
+
+doc_gram: doc/tools/docgram/fullGrammar
+
+doc_gram_verify: doc/tools/docgram/fullGrammar
+	$(SHOW)'DOC_GRAM_VERIFY'
+	$(HIDE)$(DOC_GRAM) -short -no-warn -verify $(DOC_MLGS) $(DOC_RSTS)
+
+#todo: add dependency on $(DOC_RSTS) very soon
+doc_gram_rsts: doc/tools/docgram/orderedGrammar
 
 ###########################################################################
 # Specific rules for Uint63
 ###########################################################################
-kernel/uint63.ml: kernel/write_uint63.ml kernel/uint63_x86.ml kernel/uint63_amd64.ml
-	$(SHOW)'WRITE $@'
-	$(HIDE)(cd kernel && ocaml unix.cma $(shell basename $<))
+kernel/uint63.ml: kernel/uint63_$(OCAML_INT_SIZE).ml
+	rm -f $@ && cp $< $@ && chmod a-w $@
 
 ###########################################################################
 # Main targets (coqtop.opt, coqtop.byte)
@@ -611,12 +641,6 @@ gramlib/.pack/gramlib__G%: gramlib/g% | gramlib/.pack
 # Specific rules for gramlib to pack it Dune / OCaml 4.08 style
 GRAMOBJS=$(addsuffix .cmo, $(GRAMFILES))
 
-gramlib/.pack/%: COND_BYTEFLAGS+=-no-alias-deps -w -49
-gramlib/.pack/%: COND_OPTFLAGS+=-no-alias-deps -w -49
-
-gramlib/.pack/gramlib.%: COND_OPENFLAGS=
-gramlib/.pack/gramlib__%: COND_OPENFLAGS=-open Gramlib
-
 gramlib/.pack/gramlib.cma: $(GRAMOBJS) gramlib/.pack/gramlib.cmo
 	$(SHOW)'OCAMLC -a -o $@'
 	$(HIDE)$(OCAMLC) $(MLINCLUDES) $(BYTEFLAGS) -a -o $@ $^
@@ -670,14 +694,15 @@ kernel/kernel.cmxa: kernel/kernel.mllib
 COND_IDEFLAGS=$(if $(filter ide/fake_ide% tools/coq_makefile%,$<), -I ide -I ide/protocol,)
 COND_PRINTERFLAGS=$(if $(filter dev/%,$<), -I dev,)
 
-# For module packing
-COND_OPENFLAGS=
+COND_GRAMFLAGS=$(if $(filter gramlib/.pack/%,$<),-no-alias-deps -w -49,) $(if $(filter gramlib/.pack/gramlib__%,$<),-open Gramlib,)
+
+COND_KERFLAGS=$(if $(filter kernel/%,$<),-w +a-4-44-50,)
 
 COND_BYTEFLAGS= \
- $(COND_IDEFLAGS) $(COND_PRINTERFLAGS) $(MLINCLUDES) $(BYTEFLAGS) $(COND_OPENFLAGS)
+ $(COND_IDEFLAGS) $(COND_PRINTERFLAGS) $(MLINCLUDES) $(BYTEFLAGS) $(COND_GRAMFLAGS) $(COND_KERFLAGS)
 
 COND_OPTFLAGS= \
- $(COND_IDEFLAGS) $(MLINCLUDES) $(OPTFLAGS) $(COND_OPENFLAGS)
+ $(COND_IDEFLAGS) $(MLINCLUDES) $(OPTFLAGS) $(COND_GRAMFLAGS) $(COND_KERFLAGS)
 
 plugins/micromega/%.cmi: plugins/micromega/%.mli
 	$(SHOW)'OCAMLC    $<'
@@ -686,8 +711,6 @@ plugins/micromega/%.cmi: plugins/micromega/%.mli
 plugins/nsatz/%.cmi: plugins/nsatz/%.mli
 	$(SHOW)'OCAMLC    $<'
 	$(HIDE)$(OCAMLC) $(COND_BYTEFLAGS) -package unix,num -c $<
-
-kernel/%.cmi: COND_BYTEFLAGS+=-w +a-4-44-50
 
 %.cmi: %.mli
 	$(SHOW)'OCAMLC    $<'
@@ -700,8 +723,6 @@ plugins/micromega/%.cmo: plugins/micromega/%.ml
 plugins/nsatz/%.cmo: plugins/nsatz/%.ml
 	$(SHOW)'OCAMLC    $<'
 	$(HIDE)$(OCAMLC) $(COND_BYTEFLAGS) -package unix,num -c $<
-
-kernel/%.cmo: COND_BYTEFLAGS+=-w +a-4-44-50
 
 %.cmo: %.ml
 	$(SHOW)'OCAMLC    $<'
@@ -751,8 +772,6 @@ plugins/%.cmx: plugins/%.ml
 user-contrib/%.cmx: user-contrib/%.ml
 	$(SHOW)'OCAMLOPT  $<'
 	$(HIDE)$(OCAMLOPT) $(COND_OPTFLAGS) $(HACKMLI) $($(@:.cmx=_FORPACK)) -c $<
-
-kernel/%.cmx: COND_OPTFLAGS+=-w +a-4-44-50
 
 %.cmx: %.ml
 	$(SHOW)'OCAMLOPT  $<'

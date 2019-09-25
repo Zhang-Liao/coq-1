@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -30,7 +30,7 @@
 exception Exception of exn
 
 (** This exception is used to signal abortion in [timeout] functions. *)
-exception Timeout
+exception Tac_Timeout
 
 (** This exception is used by the tactics to signal failure by lack of
     successes, rather than some other exceptions (like system
@@ -38,10 +38,9 @@ exception Timeout
 exception TacticFailure of exn
 
 let _ = CErrors.register_handler begin function
-  | Timeout -> CErrors.user_err ~hdr:"Some timeout function" (Pp.str"Timeout!")
   | Exception e -> CErrors.print e
   | TacticFailure e -> CErrors.print e
-  | _ -> Pervasives.raise CErrors.Unhandled
+  | _ -> raise CErrors.Unhandled
 end
 
 (** {6 Non-logical layer} *)
@@ -70,11 +69,11 @@ struct
     let map f a = (); fun () -> f (a ())
   end)
 
-  type 'a ref = 'a Pervasives.ref
+  type 'a ref = 'a Util.pervasives_ref
 
   let ignore a = (); fun () -> ignore (a ())
 
-  let ref a = (); fun () -> Pervasives.ref a
+  let ref a = (); fun () -> ref a
 
   (** [Pervasives.(:=)] *)
   let (:=) r a = (); fun () -> r := a
@@ -93,13 +92,13 @@ struct
         let (src, info) = CErrors.push src in
         h (e, info) ()
 
-  let read_line = fun () -> try Pervasives.read_line () with e ->
+  let read_line = fun () -> try read_line () with e ->
     let (e, info) = CErrors.push e in raise ~info e ()
 
   let print_char = fun c -> (); fun () -> print_char c
 
   let timeout = fun n t -> (); fun () ->
-    Control.timeout n t () (Exception Timeout)
+    Control.timeout n t () (Exception Tac_Timeout)
 
   let make f = (); fun () ->
     try f ()
@@ -108,7 +107,7 @@ struct
       Util.iraise (Exception e, info)
 
   (** Use the current logger. The buffer is also flushed. *)
-  let print_debug   s = make (fun _ -> Feedback.msg_info s)
+  let print_debug   s = make (fun _ -> Feedback.msg_debug s)
   let print_info    s = make (fun _ -> Feedback.msg_info s)
   let print_warning s = make (fun _ -> Feedback.msg_warning s)
   let print_notice  s = make (fun _ -> Feedback.msg_notice s)

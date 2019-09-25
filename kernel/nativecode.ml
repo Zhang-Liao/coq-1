@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -141,23 +141,11 @@ let fresh_gnormtbl l =
 
 (** Symbols (pre-computed values) **)
 
-type symbol =
-  | SymbValue of Nativevalues.t
-  | SymbSort of Sorts.t
-  | SymbName of Name.t
-  | SymbConst of Constant.t
-  | SymbMatch of annot_sw
-  | SymbInd of inductive
-  | SymbMeta of metavariable
-  | SymbEvar of Evar.t
-  | SymbLevel of Univ.Level.t
-  | SymbProj of (inductive * int)
-
 let dummy_symb = SymbValue (dummy_value ())
 
 let eq_symbol sy1 sy2 =
   match sy1, sy2 with
-  | SymbValue v1, SymbValue v2 -> Pervasives.(=) v1 v2 (** FIXME: how is this even valid? *)
+  | SymbValue v1, SymbValue v2 -> (=) v1 v2 (** FIXME: how is this even valid? *)
   | SymbSort s1, SymbSort s2 -> Sorts.equal s1 s2
   | SymbName n1, SymbName n2 -> Name.equal n1 n2
   | SymbConst kn1, SymbConst kn2 -> Constant.equal kn1 kn2
@@ -193,10 +181,6 @@ module HashtblSymbol = Hashtbl.Make(HashedTypeSymbol)
 let symb_tbl = HashtblSymbol.create 211
 
 let clear_symbols () = HashtblSymbol.clear symb_tbl
-
-type symbols = symbol array
-
-let empty_symbols = [||]
 
 let get_value tbl i =
   match tbl.(i) with

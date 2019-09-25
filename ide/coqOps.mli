@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,6 @@ class type ops =
 object
   method go_to_insert : unit task
   method go_to_mark : GText.mark -> unit task
-  method tactic_wizard : string list -> unit task
   method process_next_phrase : unit task
   method process_until_end_or_error : unit task
   method handle_reset_initial : unit task

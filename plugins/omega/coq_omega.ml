@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -27,7 +27,6 @@ open Tacmach.New
 open Tactics
 open Logic
 open Libnames
-open Globnames
 open Nametab
 open Contradiction
 open Tactypes
@@ -426,11 +425,11 @@ let destructurate_prop sigma t =
     | _, [_;_] when eq_constr c (Lazy.force coq_ge) -> Kapp (Ge,args)
     | _, [_;_] when eq_constr c (Lazy.force coq_gt) -> Kapp (Gt,args)
     | Const (sp,_), args ->
-	Kapp (Other (string_of_path (path_of_global (ConstRef sp))),args)
+        Kapp (Other (string_of_path (path_of_global (GlobRef.ConstRef sp))),args)
     | Construct (csp,_) , args ->
-	Kapp (Other (string_of_path (path_of_global (ConstructRef csp))), args)
+        Kapp (Other (string_of_path (path_of_global (GlobRef.ConstructRef csp))), args)
     | Ind (isp,_), args ->
-	Kapp (Other (string_of_path (path_of_global (IndRef isp))),args)
+        Kapp (Other (string_of_path (path_of_global (GlobRef.IndRef isp))),args)
     | Var id,[] -> Kvar id
     | Prod ({binder_name=Anonymous},typ,body), [] -> Kimp(typ,body)
     | Prod ({binder_name=Name _},_,_),[] -> CErrors.user_err Pp.(str "Omega: Not a quantifier-free goal")
@@ -500,7 +499,7 @@ let context sigma operation path (t : constr) =
       | (p, Fix ((_,n as ln),(tys,lna,v))) ->
 	  let l = Array.length v in
 	  let v' = Array.copy v in
-          v'.(n)<- loop (Pervasives.(+) i l) p v.(n); (mkFix (ln,(tys,lna,v')))
+          v'.(n)<- loop (Util.(+) i l) p v.(n); (mkFix (ln,(tys,lna,v')))
       | ((P_TYPE :: p), Prod (n,t,c)) ->
           (mkProd (n,loop i p t,c))
       | ((P_TYPE :: p), Lambda (n,t,c)) ->
@@ -684,7 +683,7 @@ let simpl_coeffs path_init path_k =
           | _ -> assert false)
       | _ -> assert false
   in
-  let n = Pervasives.(-) (List.length path_k) (List.length path_init) in
+  let n = Util.(-) (List.length path_k) (List.length path_init) in
   let newc = context sigma (fun _ t -> loop n t) (List.rev path_init) (pf_concl gl)
   in
   convert_concl ~check:false newc DEFAULTcast
@@ -1000,7 +999,7 @@ let shrink_pair p f1 f2 =
     | t1,t2 ->
 	begin
 	  oprint t1; print_newline (); oprint t2; print_newline ();
-	  flush Pervasives.stdout; CErrors.user_err Pp.(str "shrink.1")
+          flush stdout; CErrors.user_err Pp.(str "shrink.1")
 	end
 
 let reduce_factor p = function

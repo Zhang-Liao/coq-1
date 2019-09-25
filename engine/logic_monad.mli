@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -30,7 +30,7 @@
 exception Exception of exn
 
 (** This exception is used to signal abortion in [timeout] functions. *)
-exception Timeout
+exception Tac_Timeout
 
 (** This exception is used by the tactics to signal failure by lack of
     successes, rather than some other exceptions (like system

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -68,7 +68,7 @@ Require Import EnvRing.
 Fixpoint Qeval_expr (env: PolEnv Q) (e: PExpr Q) : Q :=
   match e with
     | PEc c =>  c
-    | PEX _ j =>  env j
+    | PEX j =>  env j
     | PEadd pe1 pe2 => (Qeval_expr env pe1) + (Qeval_expr env pe2)
     | PEsub pe1 pe2 => (Qeval_expr env pe1) - (Qeval_expr env pe2)
     | PEmul pe1 pe2 => (Qeval_expr env pe1) * (Qeval_expr env pe2)
@@ -80,7 +80,7 @@ Lemma Qeval_expr_simpl : forall env e,
   Qeval_expr env e =
   match e with
     | PEc c =>  c
-    | PEX _ j =>  env j
+    | PEX j =>  env j
     | PEadd pe1 pe2 => (Qeval_expr env pe1) + (Qeval_expr env pe2)
     | PEsub pe1 pe2 => (Qeval_expr env pe1) - (Qeval_expr env pe2)
     | PEmul pe1 pe2 => (Qeval_expr env pe1) * (Qeval_expr env pe2)
@@ -172,9 +172,9 @@ Qed.
 
 Require Import Coq.micromega.Tauto.
 
-Definition Qnormalise := @cnf_normalise Q 0 1 Qplus Qmult Qminus Qopp Qeq_bool.
+Definition Qnormalise := @cnf_normalise Q 0 1 Qplus Qmult Qminus Qopp Qeq_bool Qle_bool.
 
-Definition Qnegate := @cnf_negate Q 0 1 Qplus Qmult Qminus Qopp Qeq_bool.
+Definition Qnegate := @cnf_negate Q 0 1 Qplus Qmult Qminus Qopp Qeq_bool Qle_bool.
 
 Definition qunsat := check_inconsistent 0 Qeq_bool Qle_bool.
 
@@ -204,7 +204,7 @@ Proof.
     unfold eval_nformula. unfold RingMicromega.eval_nformula.
     destruct t.
     apply (check_inconsistent_sound Qsor QSORaddon) ; auto.
-  - unfold qdeduce. apply (nformula_plus_nformula_correct Qsor QSORaddon).
+  - unfold qdeduce. intros. revert H. apply (nformula_plus_nformula_correct Qsor QSORaddon);auto.
   - intros. rewrite Qeval_formula_compat. unfold Qeval_formula'. now  eapply (cnf_normalise_correct Qsor QSORaddon);eauto.
   - intros. rewrite Qeval_formula_compat. unfold Qeval_formula'. now eapply (cnf_negate_correct Qsor QSORaddon);eauto.
   - intros t w0.

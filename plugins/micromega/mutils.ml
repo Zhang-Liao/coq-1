@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -21,7 +21,7 @@
 
 module Int = struct
   type t = int
-  let compare : int -> int -> int = Pervasives.compare
+  let compare : int -> int -> int = compare
   let equal  : int -> int -> bool = (=)
 end
 
@@ -354,7 +354,7 @@ struct
 
   let from i = i
   let next i = i + 1
-  let max : int -> int -> int = Pervasives.max
+  let max : int -> int -> int = max
   let pp o i = output_string o (string_of_int i)
   let compare : int -> int -> int = Int.compare
   let to_int x = x

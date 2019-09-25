@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -20,3 +20,11 @@ val cache_term_by_tactic_then
   -> unit Proofview.tactic
 
 val tclABSTRACT : ?opaque:bool -> Id.t option -> unit Proofview.tactic -> unit Proofview.tactic
+
+(* Internal but used in a few places; should likely be made intro a
+   proper library function, or incorporated into the generic constant
+   save path *)
+val shrink_entry
+  :  ('a, 'b) Context.Named.Declaration.pt list
+  -> 'c Declare.proof_entry
+  -> 'c Declare.proof_entry * Constr.t list

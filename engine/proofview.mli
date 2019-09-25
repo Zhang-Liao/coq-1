@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -381,7 +381,7 @@ val tclENV : Environ.env tactic
 (** {7 Put-like primitives} *)
 
 (** [tclEFFECTS eff] add the effects [eff] to the current state. *)
-val tclEFFECTS : Safe_typing.private_constants -> unit tactic
+val tclEFFECTS : Evd.side_effects -> unit tactic
 
 (** [mark_as_unsafe] declares the current tactic is unsafe. *)
 val mark_as_unsafe : unit tactic
@@ -398,13 +398,22 @@ val give_up : unit tactic
 val tclPROGRESS : 'a tactic -> 'a tactic
 
 module Progress : sig
-  val goal_equal : Evd.evar_map -> Evar.t -> Evd.evar_map -> Evar.t -> bool
+(** [goal_equal ~evd ~extended_evd evar extended_evar] tests whether
+    the [evar_info] from [evd] corresponding to [evar] is equal to that
+    from [extended_evd] corresponding to [extended_evar], up to
+    existential variable instantiation and equalisable universes. The
+    universe constraints in [extended_evd] are assumed to be an
+    extension of the universe constraints in [evd]. *)
+  val goal_equal :
+    evd:Evd.evar_map ->
+    extended_evd:Evd.evar_map ->
+    Evar.t ->
+    Evar.t ->
+    bool
 end
 
 (** Checks for interrupts *)
 val tclCHECKINTERRUPT : unit tactic
-
-exception Timeout
 
 (** [tclTIMEOUT n t] can have only one success.
     In case of timeout if fails with [tclZERO Timeout]. *)

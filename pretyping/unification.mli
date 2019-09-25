@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -13,6 +13,10 @@ open EConstr
 open Environ
 open Evd
 
+type allowed_evars =
+| AllowAll
+| AllowFun of (Evar.t -> bool)
+
 type core_unify_flags = {
   modulo_conv_on_closed_terms : TransparentState.t option;
   use_metas_eagerly_in_conv_on_closed_terms : bool;
@@ -22,7 +26,7 @@ type core_unify_flags = {
   check_applied_meta_types : bool;
   use_pattern_unification : bool;
   use_meta_bound_pattern_unification : bool;
-  frozen_evars : Evar.Set.t;
+  allowed_evars : allowed_evars;
   restrict_conv_on_strict_subterms : bool;
   modulo_betaiota : bool;
   modulo_eta : bool;

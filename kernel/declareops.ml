@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -19,12 +19,14 @@ module RelDecl = Context.Rel.Declaration
 
 let safe_flags oracle = {
   check_guarded = true;
+  check_positive = true;
   check_universes = true;
   conv_oracle = oracle;
   share_reduction = true;
   enable_VM = true;
   enable_native_compiler = true;
   indices_matter = true;
+  check_template = true;
 }
 
 (** {6 Arities } *)
@@ -113,7 +115,6 @@ let subst_const_body sub cb =
         const_body_code =
           Option.map (Cemitcodes.subst_to_patch_subst sub) cb.const_body_code;
         const_universes = cb.const_universes;
-        const_private_poly_univs = cb.const_private_poly_univs;
         const_relevance = cb.const_relevance;
         const_inline_code = cb.const_inline_code;
         const_typing_flags = cb.const_typing_flags }
@@ -144,16 +145,11 @@ let hcons_universes cbu =
   | Polymorphic ctx ->
     Polymorphic (Univ.hcons_abstract_universe_context ctx)
 
-let hcons_const_private_univs = function
-  | None -> None
-  | Some univs -> Some (Univ.hcons_universe_context_set univs)
-
 let hcons_const_body cb =
   { cb with
     const_body = hcons_const_def cb.const_body;
     const_type = Constr.hcons cb.const_type;
     const_universes = hcons_universes cb.const_universes;
-    const_private_poly_univs = hcons_const_private_univs cb.const_private_poly_univs;
   }
 
 (** {6 Inductive types } *)

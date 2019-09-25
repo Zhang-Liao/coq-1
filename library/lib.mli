@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -20,22 +20,24 @@ type is_type = bool (* Module Type or just Module *)
 type export = bool option (* None for a Module Type *)
 
 val make_oname : Nametab.object_prefix -> Names.Id.t -> Libobject.object_name
+val make_foname : Names.Id.t -> Libnames.full_path * Names.KerName.t
 
 type node =
-  | Leaf of Libobject.obj
+  | Leaf of Libobject.t
   | CompilingLibrary of Nametab.object_prefix
   | OpenedModule of is_type * export * Nametab.object_prefix * Summary.frozen
   | OpenedSection of Nametab.object_prefix * Summary.frozen
 
 type library_segment = (Libobject.object_name * node) list
 
-type lib_objects = (Id.t * Libobject.obj) list
+type lib_atomic_objects = (Id.t * Libobject.obj) list
+type lib_objects = (Id.t * Libobject.t) list
 
 (** {6 Object iteration functions. } *)
 
-val open_objects : int -> Nametab.object_prefix -> lib_objects -> unit
-val load_objects : int -> Nametab.object_prefix -> lib_objects -> unit
-val subst_objects : Mod_subst.substitution -> lib_objects -> lib_objects
+val open_atomic_objects : int -> Nametab.object_prefix -> lib_atomic_objects -> unit
+val load_atomic_objects : int -> Nametab.object_prefix -> lib_atomic_objects -> unit
+val subst_atomic_objects : Mod_subst.substitution -> lib_atomic_objects -> lib_atomic_objects
 (*val load_and_subst_objects : int -> Libnames.Nametab.object_prefix -> Mod_subst.substitution -> lib_objects -> lib_objects*)
 
 (** [classify_segment seg] verifies that there are no OpenedThings,
@@ -44,12 +46,17 @@ val subst_objects : Mod_subst.substitution -> lib_objects -> lib_objects
    [Substitute], [Keep], [Anticipate] respectively.  The order of each
    returned list is the same as in the input list. *)
 val classify_segment :
-  library_segment -> lib_objects * lib_objects * Libobject.obj list
+  library_segment -> lib_objects * lib_objects * Libobject.t list
 
 (** [segment_of_objects prefix objs] forms a list of Leafs *)
 val segment_of_objects :
   Nametab.object_prefix -> lib_objects -> library_segment
 
+(** {6 ... } *)
+(** Low-level adding operations *)
+
+val add_entry : Libobject.object_name -> node -> unit
+val add_anonymous_entry : node -> unit
 
 (** {6 ... } *)
 (** Adding operations (which call the [cache] method, and getting the
@@ -140,7 +147,7 @@ val library_part :  GlobRef.t -> DirPath.t
 
 (** {6 Sections } *)
 
-val open_section : Id.t -> unit
+val open_section : poly:bool -> Id.t -> unit
 val close_section : unit -> unit
 
 (** {6 We can get and set the state of the operations (used in [States]). } *)
@@ -156,10 +163,8 @@ val drop_objects : frozen -> frozen
 val init : unit -> unit
 
 (** {6 Section management for discharge } *)
-type variable_info = Constr.named_declaration * Decl_kinds.binding_kind
-type variable_context = variable_info list 
 type abstr_info = private {
-  abstr_ctx : variable_context;
+  abstr_ctx : Constr.named_context;
   (** Section variables of this prefix *)
   abstr_subst : Univ.Instance.t;
   (** Actual names of the abstracted variables *)
@@ -167,23 +172,19 @@ type abstr_info = private {
   (** Universe quantification, same length as the substitution *)
 }
 
-val instance_from_variable_context : variable_context -> Id.t array
-
 val section_segment_of_constant : Constant.t -> abstr_info
 val section_segment_of_mutual_inductive: MutInd.t -> abstr_info
 val section_segment_of_reference : GlobRef.t -> abstr_info
 
-val variable_section_segment_of_reference : GlobRef.t -> variable_context
+val variable_section_segment_of_reference : GlobRef.t -> Constr.named_context
 
 val section_instance : GlobRef.t -> Univ.Instance.t * Id.t array
 val is_in_section : GlobRef.t -> bool
 
-val add_section_variable : Id.t -> Decl_kinds.binding_kind -> Decl_kinds.polymorphic -> Univ.ContextSet.t -> unit
+val add_section_variable : name:Id.t -> poly:bool -> unit
 val add_section_context : Univ.ContextSet.t -> unit
-val add_section_constant : Decl_kinds.polymorphic ->
-  Constant.t -> Constr.named_context -> unit
-val add_section_kn : Decl_kinds.polymorphic ->
-  MutInd.t -> Constr.named_context -> unit
+val add_section_constant : poly:bool -> Constant.t -> Constr.named_context -> unit
+val add_section_kn : poly:bool -> MutInd.t -> Constr.named_context -> unit
 val replacement_context : unit -> Opaqueproof.work_list
 
 val is_polymorphic_univ : Univ.Level.t -> bool

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -546,7 +546,7 @@ let check_inductive env kn mie =
   (* First type-check the inductive definition *)
   let (env_ar_par, univs, variance, record, paramsctxt, inds) = IndTyping.typecheck_inductive env mie in
   (* Then check positivity conditions *)
-  let chkpos = (Environ.typing_flags env).check_guarded in
+  let chkpos = (Environ.typing_flags env).check_positive in
   let names = Array.map_of_list (fun entry -> entry.mind_entry_typename, entry.mind_entry_consnames)
       mie.mind_entry_inds
   in

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -25,6 +25,8 @@ Proof.
 unfold not; intros; elim (classic p); auto.
 intro NP; elim (H NP).
 Qed.
+
+Register NNPP as core.nnpp.type.
 
 (** Peirce's law states [forall P Q:Prop, ((P -> Q) -> P) -> P].
     Thanks to [forall P, False -> P], it is equivalent to the

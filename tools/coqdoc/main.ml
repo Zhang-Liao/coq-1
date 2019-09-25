@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -396,7 +396,7 @@ let copy src dst =
   try
     let cout = open_out dst in
     try
-      while true do Pervasives.output_char cout (input_char cin) done
+      while true do output_char cout (input_char cin) done
     with End_of_file ->
       close_out cout;
       close_in cin

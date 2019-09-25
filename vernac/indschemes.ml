@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -21,15 +21,12 @@ open CErrors
 open Util
 open Names
 open Declarations
-open Entries
 open Term
 open Constr
 open Inductive
-open Decl_kinds
 open Indrec
 open Declare
 open Libnames
-open Globnames
 open Goptions
 open Nameops
 open Termops
@@ -101,21 +98,12 @@ let () =
 
 (* Util *)
 
-let define ~poly id internal sigma c t =
-  let f = declare_constant ~internal in
+let define ~poly name sigma c types =
+  let f = declare_constant ~kind:Decls.(IsDefinition Scheme) in
   let univs = Evd.univ_entry ~poly sigma in
-  let kn = f id
-    (DefinitionEntry
-      { const_entry_body = c;
-        const_entry_secctx = None;
-        const_entry_type = t;
-	const_entry_universes = univs;
-        const_entry_opaque = false;
-        const_entry_inline_code = false;
-        const_entry_feedback = None;
-      },
-      Decl_kinds.IsDefinition Scheme) in
-  definition_message id;
+  let entry = Declare.definition_entry ~univs ?types c in
+  let kn = f ~name (DefinitionEntry entry) in
+  definition_message name;
   kn
 
 (* Boolean equality *)
@@ -161,8 +149,9 @@ let try_declare_scheme what f internal names kn =
     | UndefinedCst s ->
 	alarm what internal
 	  (strbrk "Required constant " ++ str s ++ str " undefined.")
-    | AlreadyDeclared msg ->
-        alarm what internal (msg ++ str ".")
+    | AlreadyDeclared (kind, id) as exn ->
+      let msg = CErrors.print exn in
+      alarm what internal msg
     | DecidabilityMutualNotSupported ->
         alarm what internal
           (str "Decidability lemma for mutual inductive types not supported.")
@@ -377,7 +366,7 @@ requested
               | InSet -> recs ^ "_nodep"
               | InType -> recs ^ "t_nodep")
         ) in
-        let newid = add_suffix (Nametab.basename_of_global (IndRef ind)) suffix in
+        let newid = add_suffix (Nametab.basename_of_global (GlobRef.IndRef ind)) suffix in
         let newref = CAst.make newid in
           ((newref,isdep,ind,z)::l1),l2
       in
@@ -395,7 +384,7 @@ let do_mutual_induction_scheme ?(force_mutual=false) lnamedepindsort =
        let evd, indu, inst =
 	 match inst with
 	 | None ->
-            let _, ctx = Typeops.type_of_global_in_context env0 (IndRef ind) in
+            let _, ctx = Typeops.type_of_global_in_context env0 (GlobRef.IndRef ind) in
             let u, ctx = UnivGen.fresh_instance_from ctx None in
             let evd = Evd.from_ctx (UState.of_context_set ctx) in
 	      evd, (ind,u), Some u
@@ -409,14 +398,13 @@ let do_mutual_induction_scheme ?(force_mutual=false) lnamedepindsort =
     (* NB: build_mutual_induction_scheme forces nonempty list of mutual inductives
        (force_mutual is about the generated schemes) *)
     let _,_,ind,_ = List.hd lnamedepindsort in
-    Global.is_polymorphic (IndRef ind)
+    Global.is_polymorphic (GlobRef.IndRef ind)
   in
   let declare decl fi lrecref =
     let decltype = Retyping.get_type_of env0 sigma (EConstr.of_constr decl) in
     let decltype = EConstr.to_constr sigma decltype in
-    let proof_output = Future.from_val ((decl,Univ.ContextSet.empty),Safe_typing.empty_private_constants) in
-    let cst = define ~poly fi UserIndividualRequest sigma proof_output (Some decltype) in
-    ConstRef cst :: lrecref
+    let cst = define ~poly fi sigma decl (Some decltype) in
+    GlobRef.ConstRef cst :: lrecref
   in
   let _ = List.fold_right2 declare listdecl lrecnames [] in
   fixpoint_message None lrecnames
@@ -536,15 +524,14 @@ let do_combined_scheme name schemes =
       schemes
   in
   let sigma,body,typ = build_combined_scheme (Global.env ()) csts in
-  let proof_output = Future.from_val ((body,Univ.ContextSet.empty),Safe_typing.empty_private_constants) in
   (* It is possible for the constants to have different universe
      polymorphism from each other, however that is only when the user
      manually defined at least one of them (as Scheme would pick the
      polymorphism of the inductive block). In that case if they want
      some other polymorphism they can also manually define the
      combined scheme. *)
-  let poly = Global.is_polymorphic (ConstRef (List.hd csts)) in
-  ignore (define ~poly name.v UserIndividualRequest sigma proof_output (Some typ));
+  let poly = Global.is_polymorphic (GlobRef.ConstRef (List.hd csts)) in
+  ignore (define ~poly name.v sigma body (Some typ));
   fixpoint_message None [name.v]
 
 (**********************************************************************)
@@ -555,7 +542,7 @@ let declare_default_schemes kn =
   let mib = Global.lookup_mind kn in
   let n = Array.length mib.mind_packets in
   if !elim_flag && (mib.mind_finite <> Declarations.BiFinite || !bifinite_elim_flag)
-     && mib.mind_typing_flags.check_guarded then
+     && mib.mind_typing_flags.check_positive then
     declare_induction_schemes kn;
   if !case_flag then map_inductive_block declare_one_case_analysis_scheme kn n;
   if is_eq_flag() then try_declare_beq_scheme kn;

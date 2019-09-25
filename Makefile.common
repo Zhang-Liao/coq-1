@@ -1,6 +1,6 @@
 ##########################################################################
 ##         #   The Coq Proof Assistant / The Coq Development Team       ##
-##  v      #   INRIA, CNRS and contributors - Copyright 1999-2018       ##
+##  v      #   INRIA, CNRS and contributors - Copyright 1999-2019       ##
 ## <O___,, #       (see CREDITS file for the list of authors)           ##
 ##   \VV/  ###############################################################
 ##    //   #    This file is distributed under the terms of the         ##
@@ -22,6 +22,7 @@ COQTOPBYTE:=bin/coqtop.byte$(EXE)
 
 COQDEP:=bin/coqdep$(EXE)
 COQPP:=bin/coqpp$(EXE)
+DOC_GRAM:=bin/doc_grammar$(EXE)
 COQDEPBYTE:=bin/coqdep.byte$(EXE)
 COQMAKEFILE:=bin/coq_makefile$(EXE)
 COQMAKEFILEBYTE:=bin/coq_makefile.byte$(EXE)
@@ -42,7 +43,7 @@ COQMAKE_BOTH_TIME_FILES:=tools/make-both-time-files.py
 COQMAKE_BOTH_SINGLE_TIMING_FILES:=tools/make-both-single-timing-files.py
 
 TOOLS:=$(COQDEP) $(COQMAKEFILE) $(COQTEX) $(COQWC) $(COQDOC) $(COQC)\
-	$(COQWORKMGR) $(COQPP)
+	$(COQWORKMGR) $(COQPP) $(DOC_GRAM)
 TOOLS_HELPERS:=tools/CoqMakefile.in $(COQMAKE_ONE_TIME_FILE) $(COQTIME_FILE_MAKER)\
 	$(COQMAKE_BOTH_TIME_FILES) $(COQMAKE_BOTH_SINGLE_TIMING_FILES)
 
@@ -154,13 +155,14 @@ LTACCMO:=plugins/ltac/ltac_plugin.cmo plugins/ltac/tauto_plugin.cmo
 SSRMATCHINGCMO:=plugins/ssrmatching/ssrmatching_plugin.cmo
 SSRCMO:=plugins/ssr/ssreflect_plugin.cmo
 LTAC2CMO:=user-contrib/Ltac2/ltac2_plugin.cmo
+ZIFYCMO:=plugins/micromega/zify_plugin.cmo
 
 PLUGINSCMO:=$(LTACCMO) $(OMEGACMO) $(MICROMEGACMO) \
         $(RINGCMO) \
         $(EXTRACTIONCMO) \
         $(CCCMO)  $(FOCMO) $(RTAUTOCMO) $(BTAUTOCMO) \
         $(FUNINDCMO) $(NSATZCMO) $(SYNTAXCMO) \
-	$(DERIVECMO) $(SSRMATCHINGCMO) $(SSRCMO) $(LTAC2CMO)
+	$(DERIVECMO) $(SSRMATCHINGCMO) $(SSRCMO) $(LTAC2CMO) $(ZIFYCMO)
 
 ifeq ($(HASNATDYNLINK)-$(BEST),false-opt)
  STATICPLUGINS:=$(PLUGINSCMO)

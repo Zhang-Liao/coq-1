@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -730,7 +730,6 @@ Qed.
 
 (* The input: syntax of a field expression *)
 
-#[universes(template)]
 Inductive FExpr : Type :=
  | FEO : FExpr
  | FEI : FExpr
@@ -763,7 +762,6 @@ Strategy expand [FEeval].
 
 (* The result of the normalisation *)
 
-#[universes(template)]
 Record linear : Type := mk_linear {
    num : PExpr C;
    denum : PExpr C;
@@ -946,7 +944,6 @@ induction e2; intros p1 p2;
   now rewrite <- PEpow_mul_r.
 Qed.
 
-#[universes(template)]
 Record rsplit : Type := mk_rsplit {
    rsplit_left : PExpr C;
    rsplit_common : PExpr C;

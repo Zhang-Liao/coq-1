@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -1024,7 +1024,6 @@ Module E := X.
 
 Definition key := E.t.
 
-#[universes(template)]
 Record slist (elt:Type) :=
   {this :> Raw.t elt; sorted : sort (@Raw.PX.ltk elt) this}.
 Definition t (elt:Type) : Type := slist elt.

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -13,7 +13,6 @@ module CVars = Vars
 open Util
 open Termops
 open EConstr
-open Decl_kinds
 open Evarutil
 
 module RelDecl = Context.Rel.Declaration
@@ -70,26 +69,26 @@ let rec shrink ctx sign c t accu =
 | _ -> assert false
 
 let shrink_entry sign const =
-  let open Entries in
-  let typ = match const.const_entry_type with
+  let open Declare in
+  let typ = match const.proof_entry_type with
   | None -> assert false
   | Some t -> t
   in
   (* The body has been forced by the call to [build_constant_by_tactic] *)
-  let () = assert (Future.is_over const.const_entry_body) in
-  let ((body, uctx), eff) = Future.force const.const_entry_body in
+  let () = assert (Future.is_over const.proof_entry_body) in
+  let ((body, uctx), eff) = Future.force const.proof_entry_body in
   let (body, typ, ctx) = decompose (List.length sign) body typ [] in
   let (body, typ, args) = shrink ctx sign body typ [] in
   let const = { const with
-    const_entry_body = Future.from_val ((body, uctx), eff);
-    const_entry_type = Some typ;
+    proof_entry_body = Future.from_val ((body, uctx), eff);
+    proof_entry_type = Some typ;
   } in
   (const, args)
 
-let name_op_to_name ~name_op ~name ~goal_kind suffix =
+let name_op_to_name ~name_op ~name suffix =
   match name_op with
-  | Some s -> s, goal_kind
-  | None -> Nameops.add_suffix name suffix, goal_kind
+  | Some s -> s
+  | None -> Nameops.add_suffix name suffix
 
 let cache_term_by_tactic_then ~opaque ~name_op ?(goal_type=None) tac tacK =
   let open Tacticals.New in
@@ -102,10 +101,10 @@ let cache_term_by_tactic_then ~opaque ~name_op ?(goal_type=None) tac tacK =
      redundancy on constant declaration. This opens up an interesting
      question, how does abstract behave when discharge is local for example?
   *)
-  let goal_kind, suffix = if opaque
-    then (Global,poly,Proof Theorem), "_subproof"
-    else (Global,poly,DefinitionBody Definition), "_subterm" in
-  let id, goal_kind = name_op_to_name ~name_op ~name ~goal_kind suffix in
+  let suffix = if opaque
+    then "_subproof"
+    else "_subterm" in
+  let name = name_op_to_name ~name_op ~name suffix in
   Proofview.Goal.enter begin fun gl ->
   let env = Proofview.Goal.env gl in
   let sigma = Proofview.Goal.sigma gl in
@@ -121,7 +120,7 @@ let cache_term_by_tactic_then ~opaque ~name_op ?(goal_type=None) tac tacK =
         then (s1,push_named_context_val d s2)
         else (Context.Named.add d s1,s2))
       global_sign (Context.Named.empty, Environ.empty_named_context_val) in
-  let id = Namegen.next_global_ident_away id (pf_ids_set_of_hyps gl) in
+  let name = Namegen.next_global_ident_away name (pf_ids_set_of_hyps gl) in
   let concl = match goal_type with
               | None ->  Proofview.Goal.concl gl
               | Some ty -> ty in
@@ -141,7 +140,7 @@ let cache_term_by_tactic_then ~opaque ~name_op ?(goal_type=None) tac tacK =
   let solve_tac = tclCOMPLETE (tclTHEN (tclDO (List.length sign) Tactics.intro) tac) in
   let ectx = Evd.evar_universe_context evd in
   let (const, safe, ectx) =
-    try Pfedit.build_constant_by_tactic ~goal_kind id ectx secsign concl solve_tac
+    try Pfedit.build_constant_by_tactic ~poly ~name ectx secsign concl solve_tac
     with Logic_monad.TacticFailure e as src ->
     (* if the tactic [tac] fails, it reports a [TacticFailure e],
        which is an error irrelevant to the proof system (in fact it
@@ -152,30 +151,29 @@ let cache_term_by_tactic_then ~opaque ~name_op ?(goal_type=None) tac tacK =
   in
   let const, args = shrink_entry sign const in
   let args = List.map EConstr.of_constr args in
-  let cd = Entries.DefinitionEntry { const with Entries.const_entry_opaque = opaque } in
-  let decl = (cd, if opaque then IsProof Lemma else IsDefinition Definition) in
+  let cd = Declare.DefinitionEntry { const with Declare.proof_entry_opaque = opaque } in
+  let kind = if opaque then Decls.(IsProof Lemma) else Decls.(IsDefinition Definition) in
   let cst () =
     (* do not compute the implicit arguments, it may be costly *)
     let () = Impargs.make_implicit_args false in
     (* ppedrot: seems legit to have abstracted subproofs as local*)
-    Declare.declare_private_constant ~role:Entries.Subproof ~internal:Declare.InternalTacticRequest ~local:true id decl
+    Declare.declare_private_constant ~local:Declare.ImportNeedQualified ~name ~kind cd
   in
   let cst, eff = Impargs.with_implicit_protection cst () in
-  let inst = match const.Entries.const_entry_universes with
+  let inst = match const.Declare.proof_entry_universes with
   | Entries.Monomorphic_entry _ -> EInstance.empty
   | Entries.Polymorphic_entry (_, ctx) ->
     (* We mimic what the kernel does, that is ensuring that no additional
        constraints appear in the body of polymorphic constants. Ideally this
        should be enforced statically. *)
-    let (_, body_uctx), _ = Future.force const.Entries.const_entry_body in
+    let (_, body_uctx), _ = Future.force const.Declare.proof_entry_body in
     let () = assert (Univ.ContextSet.is_empty body_uctx) in
     EInstance.make (Univ.UContext.instance ctx)
   in
   let lem = mkConstU (cst, inst) in
   let evd = Evd.set_universe_context evd ectx in
-  let open Safe_typing in
-  let effs = concat_private eff
-    Entries.(snd (Future.force const.const_entry_body)) in
+  let effs = Evd.concat_side_effects eff
+      (snd (Future.force const.Declare.proof_entry_body)) in
   let solve =
     Proofview.tclEFFECTS effs <*>
     tacK lem args

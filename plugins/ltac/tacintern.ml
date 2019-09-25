@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -18,7 +18,6 @@ open Tacred
 open Util
 open Names
 open Libnames
-open Globnames
 open Smartlocate
 open Constrexpr
 open Termops
@@ -119,18 +118,13 @@ let intern_constr_reference strict ist qid =
 (* Internalize an isolated reference in position of tactic *)
 
 let warn_deprecated_tactic =
-  CWarnings.create ~name:"deprecated-tactic" ~category:"deprecated"
-    (fun (qid,depr) -> str "Tactic " ++ pr_qualid qid ++
-      strbrk " is deprecated" ++
-      pr_opt (fun since -> str "since " ++ str since) depr.Attributes.since ++
-      str "." ++ pr_opt (fun note -> str note) depr.Attributes.note)
+  Deprecation.create_warning ~object_name:"Tactic" ~warning_name:"deprecated-tactic"
+    pr_qualid
 
 let warn_deprecated_alias =
-  CWarnings.create ~name:"deprecated-tactic-notation" ~category:"deprecated"
-    (fun (kn,depr) -> str "Tactic Notation " ++ Pptactic.pr_alias_key kn ++
-      strbrk " is deprecated since" ++
-      pr_opt (fun since -> str "since " ++ str since) depr.Attributes.since ++
-      str "." ++ pr_opt (fun note -> str note) depr.Attributes.note)
+  Deprecation.create_warning ~object_name:"Tactic Notation"
+    ~warning_name:"deprecated-tactic-notation"
+    Pptactic.pr_alias_key
 
 let intern_isolated_global_tactic_reference qid =
   let loc = qid.CAst.loc in
@@ -309,7 +303,7 @@ let intern_evaluable_reference_or_by_notation ist = function
   | {v=ByNotation (ntn,sc);loc} ->
       evaluable_of_global_reference ist.genv
       (Notation.interp_notation_as_global_reference ?loc
-        (function ConstRef _ | VarRef _ -> true | _ -> false) ntn sc)
+        GlobRef.(function ConstRef _ | VarRef _ -> true | _ -> false) ntn sc)
 
 (* Globalize a reduction expression *)
 let intern_evaluable ist r =
@@ -388,7 +382,7 @@ let intern_typed_pattern_or_ref_with_occurrences ist (l,p) =
       | GRef (r,None) ->
           Inl (ArgArg (evaluable_of_global_reference ist.genv r,None))
       | GVar id ->
-          let r = evaluable_of_global_reference ist.genv (VarRef id) in
+          let r = evaluable_of_global_reference ist.genv (GlobRef.VarRef id) in
           Inl (ArgArg (r,None))
       | _ ->
           let bound_names = Glob_ops.bound_glob_vars c in
@@ -800,7 +794,8 @@ let () =
     let ist = { ist with ltacvars = !lf } in
     (ist, ans)
   in
-  Genintern.register_intern0 wit_intro_pattern intern_intro_pattern
+  Genintern.register_intern0 wit_intropattern intern_intro_pattern [@warning "-3"];
+  Genintern.register_intern0 wit_simple_intropattern intern_intro_pattern
 
 let () =
   let intern_clause ist cl =

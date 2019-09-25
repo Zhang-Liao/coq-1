@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -217,7 +217,8 @@ type interp_rule =
   | SynDefRule of KerName.t
 
 val declare_notation_interpretation : notation -> scope_name option ->
-      interpretation -> notation_location -> onlyprint:bool -> unit
+  interpretation -> notation_location -> onlyprint:bool ->
+  Deprecation.t option -> unit
 
 val declare_uninterpretation : interp_rule -> interpretation -> unit
 

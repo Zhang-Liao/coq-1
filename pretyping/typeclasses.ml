@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -205,7 +205,7 @@ let build_subclasses ~check env sigma glob { hint_priority = pri } =
 		   | Some p, None -> Some (p + 1)
 		   | _, _ -> None
 		 in
-		   Some (ConstRef proj, { info with hint_priority = newpri }, body)) tc.cl_projs
+                   Some (GlobRef.ConstRef proj, { info with hint_priority = newpri }, body)) tc.cl_projs
 	in
 	let declare_proj hints (cref, info, body) =
 	  let path' = cref :: path in
@@ -243,11 +243,11 @@ let instance_constructor (cl,u) args =
   let open EConstr in
   let pars = fst (List.chop lenpars args) in
     match cl.cl_impl with
-      | IndRef ind -> 
+      | GlobRef.IndRef ind ->
         let ind = ind, u in
           (Some (applist (mkConstructUi (ind, 1), args)),
            applist (mkIndU ind, pars))
-      | ConstRef cst -> 
+      | GlobRef.ConstRef cst ->
         let cst = cst, u in
 	let term = match args with
 	  | [] -> None

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -24,7 +24,7 @@ type 'a effect_handler =
 
 type _ trust =
 | Pure : unit trust
-| SideEffects : 'a effect_handler -> 'a trust
+| SideEffects : 'a effect_handler -> 'a Entries.seff_wrap trust
 
 val translate_local_def : env -> Id.t -> section_def_entry ->
   constr * Sorts.relevance * types

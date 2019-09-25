@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -38,7 +38,6 @@ open Coqlib
 open Declarations
 open Indrec
 open Clenv
-open Evd
 open Ind_tables
 open Eqschemes
 open Locus
@@ -107,7 +106,7 @@ let rewrite_core_unif_flags = {
   check_applied_meta_types = true;
   use_pattern_unification = true;
   use_meta_bound_pattern_unification = true;
-  frozen_evars = Evar.Set.empty;
+  allowed_evars = AllowAll;
   restrict_conv_on_strict_subterms = false;
   modulo_betaiota = false;
   modulo_eta = true;
@@ -126,16 +125,17 @@ let freeze_initial_evars sigma flags clause =
   (* We take evars of the type: this may include old evars! For excluding *)
   (* all old evars, including the ones occurring in the rewriting lemma, *)
   (* we would have to take the clenv_value *)
-  let newevars = Evarutil.undefined_evars_of_term sigma (clenv_type clause) in
-  let evars =
-    fold_undefined (fun evk _ evars ->
-      if Evar.Set.mem evk newevars then evars
-      else Evar.Set.add evk evars)
-      sigma Evar.Set.empty in
+  let newevars = lazy (Evarutil.undefined_evars_of_term sigma (clenv_type clause)) in
+  let initial = Evd.undefined_map sigma in
+  let allowed evk =
+    if Evar.Map.mem evk initial then false
+    else Evar.Set.mem evk (Lazy.force newevars)
+  in
+  let allowed_evars = AllowFun allowed in
   {flags with
-    core_unify_flags = {flags.core_unify_flags with frozen_evars = evars};
-    merge_unify_flags = {flags.merge_unify_flags with frozen_evars = evars};
-    subterm_unify_flags = {flags.subterm_unify_flags with frozen_evars = evars}}
+    core_unify_flags = {flags.core_unify_flags with allowed_evars};
+    merge_unify_flags = {flags.merge_unify_flags with allowed_evars};
+    subterm_unify_flags = {flags.subterm_unify_flags with allowed_evars}}
 
 let make_flags frzevars sigma flags clause =
   if frzevars then freeze_initial_evars sigma flags clause else flags
@@ -188,8 +188,7 @@ let rewrite_conv_closed_core_unif_flags = {
 
   use_meta_bound_pattern_unification = true;
 
-  frozen_evars = Evar.Set.empty;
-    (* This is set dynamically *)
+  allowed_evars = AllowAll;
 
   restrict_conv_on_strict_subterms = false;
   modulo_betaiota = false;
@@ -223,8 +222,7 @@ let rewrite_keyed_core_unif_flags = {
 
   use_meta_bound_pattern_unification = true;
 
-  frozen_evars = Evar.Set.empty;
-    (* This is set dynamically *)
+  allowed_evars = AllowAll;
 
   restrict_conv_on_strict_subterms = false;
   modulo_betaiota = true;
@@ -257,7 +255,9 @@ let tclNOTSAMEGOAL tac =
     Proofview.Goal.goals >>= fun gls ->
     let check accu gl' =
       gl' >>= fun gl' ->
-      let accu = accu || Proofview.Progress.goal_equal sigma ev (project gl') (goal gl') in
+      let accu = accu || Proofview.Progress.goal_equal
+                            ~evd:sigma ~extended_evd:(project gl') ev (goal gl')
+      in
       Proofview.tclUNIT accu
     in
     Proofview.Monad.List.fold_left check false gls >>= fun has_same ->
@@ -334,6 +334,21 @@ let jmeq_same_dom env sigma = function
       | _, [dom1; _; dom2;_] -> is_conv env sigma dom1 dom2
       | _ -> false
 
+let eq_elimination_ref l2r sort =
+  let name =
+    if l2r then
+      match sort with
+      | InProp -> "core.eq.ind_r"
+      | InSProp -> "core.eq.sind_r"
+      | InSet | InType -> "core.eq.rect_r"
+    else
+      match sort with
+      | InProp -> "core.eq.ind"
+      | InSProp -> "core.eq.sind"
+      | InSet | InType -> "core.eq.rect"
+  in
+  if Coqlib.has_ref name then Some (Coqlib.lib_ref name) else None
+
 (* find_elim determines which elimination principle is necessary to
    eliminate lbeq on sort_of_gl. *)
 
@@ -345,42 +360,42 @@ let find_elim hdcncl lft2rgt dep cls ot =
   in
   let inccl = Option.is_empty cls in
   let env = Proofview.Goal.env gl in
-  (* if (is_global Coqlib.glob_eq hdcncl || *)
-  (*     (is_global Coqlib.glob_jmeq hdcncl && *)
-  (*        jmeq_same_dom env sigma ot)) && not dep *)
-  if (is_global_exists "core.eq.type" hdcncl ||
-      (is_global_exists "core.JMeq.type" hdcncl
-       && jmeq_same_dom env sigma ot)) && not dep
+  let is_eq = is_global_exists "core.eq.type" hdcncl in
+  let is_jmeq = is_global_exists "core.JMeq.type" hdcncl && jmeq_same_dom env sigma ot in
+  if (is_eq || is_jmeq) && not dep
   then
-    let c = 
+    let sort = elimination_sort_of_clause cls gl in
+    let c =
       match EConstr.kind sigma hdcncl with 
-      | Ind (ind_sp,u) -> 
-	let pr1 = 
-          lookup_eliminator env ind_sp (elimination_sort_of_clause cls gl)
-	in
+      | Ind (ind_sp,u) ->
         begin match lft2rgt, cls with
         | Some true, None
         | Some false, Some _ ->
-	  let c1 = destConstRef pr1 in 
-          let mp,l = Constant.repr2 (Constant.make1 (Constant.canonical c1)) in
-	  let l' = Label.of_id (add_suffix (Label.to_id l) "_r")  in 
-          let c1' = Global.constant_of_delta_kn (KerName.make mp l') in
-	  begin 
-	    try 
-	      let _ = Global.lookup_constant c1' in
-		c1'
-	    with Not_found -> 
+          begin match if is_eq then eq_elimination_ref true sort else None with
+          | Some r -> destConstRef r
+          | None ->
+            let c1 = destConstRef (lookup_eliminator env ind_sp sort) in
+            let mp,l = Constant.repr2 (Constant.make1 (Constant.canonical c1)) in
+            let l' = Label.of_id (add_suffix (Label.to_id l) "_r")  in
+            let c1' = Global.constant_of_delta_kn (KerName.make mp l') in
+            try
+              let _ = Global.lookup_constant c1' in c1'
+            with Not_found ->
 	      user_err ~hdr:"Equality.find_elim"
                 (str "Cannot find rewrite principle " ++ Label.print l' ++ str ".")
 	  end
-	| _ -> destConstRef pr1
+        | _ ->
+          begin match if is_eq then eq_elimination_ref false sort else None with
+          | Some r -> destConstRef r
+          | None -> destConstRef (lookup_eliminator env ind_sp sort)
+          end
         end
       | _ -> 
 	  (* cannot occur since we checked that we are in presence of 
 	     Logic.eq or Jmeq just before *)
 	assert false
     in
-        pf_constr_of_global (ConstRef c) 
+        pf_constr_of_global (GlobRef.ConstRef c)
   else
   let scheme_name = match dep, lft2rgt, inccl with
     (* Non dependent case *)
@@ -399,7 +414,7 @@ let find_elim hdcncl lft2rgt dep cls ot =
       
       let c, eff = find_scheme scheme_name ind in 
       Proofview.tclEFFECTS eff <*>
-        pf_constr_of_global (ConstRef c) 
+        pf_constr_of_global (GlobRef.ConstRef c)
   | _ -> assert false
   end
 
@@ -946,12 +961,12 @@ let build_coq_I () = pf_constr_of_global (lib_ref "core.True.I")
 let rec build_discriminator env sigma true_0 false_0 dirn c = function
   | [] ->
       let ind = get_type_of env sigma c in
-      build_selector env sigma dirn c ind true_0 false_0
+      build_selector env sigma dirn c ind true_0 (fst false_0)
   | ((sp,cnum),argnum)::l ->
       let (cnum_nlams,cnum_env,kont) = descend_then env sigma c cnum in
       let newc = mkRel(cnum_nlams-argnum) in
       let subval = build_discriminator cnum_env sigma true_0 false_0 dirn newc l in
-      kont sigma subval (false_0,mkProp)
+      kont sigma subval false_0
 
 (* Note: discrimination could be more clever: if some elimination is
    not allowed because of a large impredicative constructor in the
@@ -983,25 +998,22 @@ let gen_absurdity id =
           absurd_term=False
 *)
 
-let ind_scheme_of_eq lbeq =
+let ind_scheme_of_eq lbeq to_kind =
   let (mib,mip) = Global.lookup_inductive (destIndRef lbeq.eq) in
-  let kind = inductive_sort_family mip in
+  let from_kind = inductive_sort_family mip in
   (* use ind rather than case by compatibility *)
-  let kind =
-    if kind == InProp then Elimschemes.ind_scheme_kind_from_prop
-    else Elimschemes.ind_scheme_kind_from_type in
+  let kind = Elimschemes.nondep_elim_scheme from_kind to_kind in
   let c, eff = find_scheme kind (destIndRef lbeq.eq) in
-    ConstRef c, eff
+    GlobRef.ConstRef c, eff
 
 
-let discrimination_pf e (t,t1,t2) discriminator lbeq =
+let discrimination_pf e (t,t1,t2) discriminator lbeq to_kind =
   build_coq_I () >>= fun i ->
-  build_coq_False () >>= fun absurd_term ->
-  let eq_elim, eff       = ind_scheme_of_eq lbeq in
+  let eq_elim, eff = ind_scheme_of_eq lbeq to_kind in
   Proofview.tclEFFECTS eff <*>
     pf_constr_of_global eq_elim >>= fun eq_elim ->
     Proofview.tclUNIT
-       (applist (eq_elim, [t;t1;mkNamedLambda (make_annot e Sorts.Relevant) t discriminator;i;t2]), absurd_term)
+       (applist (eq_elim, [t;t1;mkNamedLambda (make_annot e Sorts.Relevant) t discriminator;i;t2]))
 
 
 let eq_baseid = Id.of_string "e"
@@ -1018,21 +1030,23 @@ let apply_on_clause (f,t) clause =
 let discr_positions env sigma (lbeq,eqn,(t,t1,t2)) eq_clause cpath dirn =
   build_coq_True () >>= fun true_0 ->
   build_coq_False () >>= fun false_0 ->
+  let false_ty = Retyping.get_type_of env sigma false_0 in
+  let false_kind = Retyping.get_sort_family_of env sigma false_0 in
   let e = next_ident_away eq_baseid (vars_of_env env) in
   let e_env = push_named (Context.Named.Declaration.LocalAssum (make_annot e Sorts.Relevant,t)) env in
   let discriminator =
     try
       Proofview.tclUNIT
-        (build_discriminator e_env sigma true_0 false_0 dirn (mkVar e) cpath)
+        (build_discriminator e_env sigma true_0 (false_0,false_ty) dirn (mkVar e) cpath)
     with
       UserError _ as ex -> Proofview.tclZERO ex
   in
     discriminator >>= fun discriminator ->
-    discrimination_pf e (t,t1,t2) discriminator lbeq >>= fun (pf, absurd_term) ->
-    let pf_ty = mkArrow eqn Sorts.Relevant absurd_term in
+    discrimination_pf e (t,t1,t2) discriminator lbeq false_kind >>= fun pf ->
+    let pf_ty = mkArrow eqn Sorts.Relevant false_0 in
     let absurd_clause = apply_on_clause (pf,pf_ty) eq_clause in
     let pf = Clenvtac.clenv_value_cast_meta absurd_clause in
-    tclTHENS (assert_after Anonymous absurd_term)
+    tclTHENS (assert_after Anonymous false_0)
       [onLastHypId gen_absurdity; (Proofview.V82.tactic (Refiner.refiner ~check:true EConstr.Unsafe.(to_constr pf)))]
 
 let discrEq (lbeq,_,(t,t1,t2) as u) eq_clause =

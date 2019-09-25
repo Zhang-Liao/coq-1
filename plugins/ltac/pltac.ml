@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -52,7 +52,9 @@ let () =
   let open Stdarg in
   let open Tacarg in
   register_grammar wit_int_or_var (int_or_var);
-  register_grammar wit_intro_pattern (simple_intropattern);
+  register_grammar wit_intro_pattern (simple_intropattern); (* To remove at end of deprecation phase *)
+(* register_grammar wit_intropattern (intropattern); *) (* To be added at end of deprecation phase *)
+  register_grammar wit_simple_intropattern (simple_intropattern);
   register_grammar wit_quant_hyp (quantified_hypothesis);
   register_grammar wit_uconstr (uconstr);
   register_grammar wit_open_constr (open_constr);

@@ -1,10 +1,12 @@
 (* -*- coding: utf-8 -*- *)
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 (*                                                                      *)
 (* Micromega: A reflexive tactic using the Positivstellensatz           *)
@@ -25,16 +27,18 @@ Set Implicit Arguments.
  * As a side note, by dropping the polymorphism, one gets small, yet noticeable, speed-up.
  *)
 
+Inductive t {A} : Type :=
+| Empty : t
+| Elt : A -> t
+| Branch : t  -> A -> t  -> t .
+Arguments t : clear implicits.
+
 Section MakeVarMap.
   
   Variable A : Type.
   Variable default : A.
 
-  #[universes(template)]
-  Inductive t  : Type :=
-  | Empty : t
-  | Elt : A -> t
-  | Branch : t  -> A -> t  -> t .
+  Notation t := (t A).
 
   Fixpoint find (vm : t) (p:positive) {struct vm} : A :=
     match vm with
@@ -46,7 +50,6 @@ Section MakeVarMap.
                         | xI p => find r p
                       end
     end.
-
 
   Fixpoint singleton (x:positive) (v : A) : t :=
     match x with

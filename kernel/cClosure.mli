@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -83,10 +83,6 @@ val betazeta          : reds
 val delta             : reds
 val zeta              : reds
 val nored             : reds
-
-
-val unfold_side_red : reds
-val unfold_red : evaluable_global_reference -> reds
 
 (***********************************************************************)
 type table_key = Constant.t Univ.puniverses tableKey

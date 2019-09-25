@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -97,7 +97,8 @@ let check_universes error env u1 u2 =
   match u1, u2 with
   | Monomorphic _, Monomorphic _ -> env
   | Polymorphic auctx1, Polymorphic auctx2 ->
-    if not (UGraph.check_subtype (Environ.universes env) auctx2 auctx1) then
+    let lbound = Environ.universes_lbound env in
+    if not (UGraph.check_subtype ~lbound (Environ.universes env) auctx2 auctx1) then
       error (IncompatibleConstraints { got = auctx1; expect = auctx2; } )
     else
       Environ.push_context ~strict:false (Univ.AUContext.repr auctx2) env

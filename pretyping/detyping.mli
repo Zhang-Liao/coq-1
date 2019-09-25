@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -57,10 +57,10 @@ val detype_rel_context : 'a delay -> ?lax:bool -> constr option -> Id.Set.t -> (
 
 val share_pattern_names :
   (Id.Set.t -> names_context -> 'c -> Pattern.constr_pattern -> 'a) -> int ->
-  (Name.t * Decl_kinds.binding_kind * 'b option * 'a) list ->
+  (Name.t * binding_kind * 'b option * 'a) list ->
   Id.Set.t -> names_context -> 'c -> Pattern.constr_pattern ->
   Pattern.constr_pattern ->
-  (Name.t * Decl_kinds.binding_kind * 'b option * 'a) list * 'a * 'a
+  (Name.t * binding_kind * 'b option * 'a) list * 'a * 'a
 
 val detype_closed_glob : ?lax:bool -> bool -> Id.Set.t -> env -> evar_map -> closed_glob_constr -> glob_constr
 
@@ -91,7 +91,7 @@ module PrintingInductiveMake :
   end) ->
     sig
       type t = Names.inductive
-      val compare : t -> t -> int
+      module Set = Indset
       val encode : Environ.env -> Libnames.qualid -> Names.inductive
       val subst : substitution -> t -> t
       val printer : t -> Pp.t

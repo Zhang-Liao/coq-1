@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -13,7 +13,8 @@ let debug = false
 type priority = Low | High
 
 (* Default priority *)
-let async_proofs_worker_priority = ref Low
+
+let default_async_proofs_worker_priority = Low
 
 let string_of_priority = function Low -> "low" | High -> "high"
 let priority_of_string = function

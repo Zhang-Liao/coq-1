@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -67,13 +67,13 @@ let value_of_evaluable_ref env evref u =
   | EvalVarRef id -> env |> lookup_named id |> NamedDecl.get_value |> Option.get
 
 let evaluable_of_global_reference env = function
-  | ConstRef cst when is_evaluable_const env cst -> EvalConstRef cst
-  | VarRef id when is_evaluable_var env id -> EvalVarRef id
+  | GlobRef.ConstRef cst when is_evaluable_const env cst -> EvalConstRef cst
+  | GlobRef.VarRef id when is_evaluable_var env id -> EvalVarRef id
   | r -> error_not_evaluable r
 
 let global_of_evaluable_reference = function
-  | EvalConstRef cst -> ConstRef cst
-  | EvalVarRef id -> VarRef id
+  | EvalConstRef cst -> GlobRef.ConstRef cst
+  | EvalVarRef id -> GlobRef.VarRef id
 
 type evaluable_reference =
   | EvalConst of Constant.t
@@ -597,7 +597,7 @@ let special_red_case env sigma whfun (ci, p, c, lf) =
 
 let recargs = function
   | EvalVar _ | EvalRel _ | EvalEvar _ -> None
-  | EvalConst c -> ReductionBehaviour.get (ConstRef c)
+  | EvalConst c -> ReductionBehaviour.get (GlobRef.ConstRef c)
 
 let reduce_projection env sigma p ~npars (recarg'hd,stack') stack =
   (match EConstr.kind sigma recarg'hd with
@@ -786,7 +786,7 @@ and whd_simpl_stack env sigma =
            let unf = Projection.unfolded p in
            if unf || is_evaluable env (EvalConstRef (Projection.constant p)) then
              let npars = Projection.npars p in
-             (match unf, get (ConstRef (Projection.constant p)) with
+             (match unf, get (GlobRef.ConstRef (Projection.constant p)) with
               | false, Some NeverUnfold -> s'
               | false, Some (UnfoldWhen { recargs } | UnfoldWhenNoMatch { recargs })
                 when not (List.is_empty recargs) ->
@@ -1101,7 +1101,16 @@ let string_of_evaluable_ref env = function
   | EvalVarRef id -> Id.to_string id
   | EvalConstRef kn ->
       string_of_qualid
-        (Nametab.shortest_qualid_of_global (vars_of_env env) (ConstRef kn))
+        (Nametab.shortest_qualid_of_global (vars_of_env env) (GlobRef.ConstRef kn))
+
+(* Removing fZETA for finer behaviour would break many developments *)
+let unfold_side_flags = RedFlags.[fBETA;fMATCH;fFIX;fCOFIX;fZETA]
+let unfold_side_red = RedFlags.(mkflags [fBETA;fMATCH;fFIX;fCOFIX;fZETA])
+let unfold_red kn =
+  let flag = match kn with
+    | EvalVarRef id -> RedFlags.fVAR id
+    | EvalConstRef kn -> RedFlags.fCONST kn in
+  RedFlags.mkflags (flag::unfold_side_flags)
 
 let unfold env sigma name c =
   if is_evaluable env name then
@@ -1285,7 +1294,7 @@ let reduce_to_ref_gen allow_product env sigma ref t =
   if isIndRef ref then
     let ((mind,u),t) = reduce_to_ind_gen allow_product env sigma t in
     begin match ref with
-    | IndRef mind' when eq_ind mind mind' -> t
+    | GlobRef.IndRef mind' when eq_ind mind mind' -> t
     | _ -> error_cannot_recognize ref
     end
   else

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,7 @@ val string_of_priority : priority -> string
 val priority_of_string : string -> priority
 
 (* Default priority *)
-val async_proofs_worker_priority : priority ref
+val default_async_proofs_worker_priority : priority
 
 (* Connects to a work manager if any. If no worker manager, then
    -async-proofs-j and -async-proofs-tac-j are used *)

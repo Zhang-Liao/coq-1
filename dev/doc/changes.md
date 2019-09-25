@@ -5,6 +5,39 @@
 - Functions and types deprecated in 8.10 have been removed in Coq
   8.11.
 
+- Type Decl_kinds.locality has been restructured, see commit
+  message. Main change to do generally is to change the flag "Global"
+  to "Global ImportDefaultBehavior".
+
+Proof state:
+
+  Proofs that are attached to a top-level constant (such as lemmas)
+  are represented by `Lemmas.t`, as they do contain additional
+  information related to the constant declaration. Some functions have
+  been renamed from `start_proof` to `start_lemma`
+
+
+  Plugins that require access to the information about currently
+  opened lemmas can add one of the `![proof]` attributes to their
+  `mlg` entry, which will refine the type accordingly. See
+  documentation in `vernacentries` for more information.
+
+  Proof `terminators` have been removed in favor of a principled
+  proof-saving path. This should not affect the regular API user, but
+  if plugin writes need special handling of the proof term they should
+  now work with Coq upstream to unsure the provided API does work and
+  is principled. Closing `hooks` are still available for simple
+  registration on constant save path, and essentially they do provide
+  the same power as terminators, but don't encourage their use other
+  than for simple tasks [such as adding a constant to a database]
+
+  Additionally, the API for proof/lemma handling has been refactored,
+  triples have been split into named arguments, and a few bits of
+  duplicated information among layers has been cleaned up. Most proof
+  information is now represented in a direct-style, as opposed to it
+  living inside closures in previous Coq versions; thus, proof
+  manipulation possibilities have been improved.
+
 ## Changes between Coq 8.9 and Coq 8.10
 
 ### ML4 Pre Processing
@@ -58,6 +91,19 @@ Coqlib:
   vernacular `Register` command; it binds a name to a constant. The second
   command then enables to locate the registered constant through its name. The
   name resolution is dynamic.
+
+Proof state:
+
+- Handling of proof state has been fully functionalized, thus it is
+  not possible to call global functions such as `get_current_context ()`.
+
+  The main type for functions that need to handle proof state is
+  `Proof_global.t`.
+
+  Unfortunately, this change was not possible to do in a
+  backwards-compatible way, but in most case the api changes are
+  straightforward, with functions taking and returning an extra
+  argument.
 
 Macros:
 

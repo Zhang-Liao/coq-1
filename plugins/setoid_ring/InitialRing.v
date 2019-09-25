@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -740,7 +740,6 @@ Ltac abstract_ring_morphism set ext rspec :=
   | _ => fail 1 "bad ring structure"
   end.
 
-#[universes(template)]
 Record hypo : Type := mkhypo {
    hypo_type : Type;
    hypo_proof : hypo_type

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -24,6 +24,7 @@ sig
   val conjugate_verb_to_be : int -> string
   val ordinal : int -> string
   val is_sub : string -> string -> int -> bool
+  val is_prefix : string -> string -> bool
   module Set : Set.S with type elt = t
   module Map : CMap.ExtS with type key = t and module Set := Set
   module List : CList.MonoS with type elt = t
@@ -100,6 +101,9 @@ let is_sub p s off =
         if cp = cs then aux (succ i) else false
     in
     aux 0
+
+let is_prefix p s =
+  is_sub p s 0
 
 let plural n s = if n<>1 then s^"s" else s
 

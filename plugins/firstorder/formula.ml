@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,6 @@ open EConstr
 open Vars
 open Util
 open Declarations
-open Globnames
 
 module RelDecl = Context.Rel.Declaration
 
@@ -124,7 +123,7 @@ type side = Hyp | Concl | Hint
 
 let no_atoms = (false,{positive=[];negative=[]})
 
-let dummy_id=VarRef (Id.of_string "_") (* "_" cannot be parsed *)
+let dummy_id=GlobRef.VarRef (Id.of_string "_") (* "_" cannot be parsed *)
 
 let build_atoms env sigma metagen side cciterm =
   let trivial =ref false

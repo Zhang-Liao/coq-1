@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -20,7 +20,6 @@ open Proofview.Notations
 open Termops
 open Formula
 open Sequent
-open Globnames
 
 module NamedDecl = Context.Named.Declaration
 
@@ -48,7 +47,7 @@ let wrap n b continue seq =
 	      List.exists (occur_var_in_decl env sigma id) ctx then
 		(aux (i-1) q (nd::ctx))
 	    else
-	      add_formula env sigma Hyp (VarRef id) (NamedDecl.get_type nd) (aux (i-1) q (nd::ctx)) in
+              add_formula env sigma Hyp (GlobRef.VarRef id) (NamedDecl.get_type nd) (aux (i-1) q (nd::ctx)) in
   let seq1=aux n nc [] in
   let seq2=if b then
     add_formula env sigma Concl dummy_id (pf_concl gls) seq1 else seq1 in
@@ -56,7 +55,7 @@ let wrap n b continue seq =
   end
 
 let clear_global=function
-    VarRef id-> clear [id]
+  | GlobRef.VarRef id-> clear [id]
   | _->tclIDTAC
 
 (* connection rules *)

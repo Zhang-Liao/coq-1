@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -28,6 +28,8 @@ type conditions =
   | Naive (* Only try the first occurrence of the lemma (default) *)
   | FirstSolved (* Use the first match whose side-conditions are solved *)
   | AllMatches (* Rewrite all matches whose side-conditions are solved *)
+
+val eq_elimination_ref : orientation -> Sorts.family -> GlobRef.t option
 
 val general_rewrite_bindings :
   orientation -> occurrences -> freeze_evars_flag -> dep_proof_flag ->

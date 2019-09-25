@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -191,7 +191,10 @@ val print_and_diff : Proof.t option -> Proof.t option -> unit
 type axiom =
   | Constant of Constant.t (* An axiom or a constant. *)
   | Positive of MutInd.t (* A mutually inductive definition which has been assumed positive. *)
-  | Guarded of Constant.t (* a constant whose (co)fixpoints have been assumed to be guarded *)
+  | Guarded of GlobRef.t (* a constant whose (co)fixpoints have been assumed to be guarded *)
+  | TemplatePolymorphic of MutInd.t (* A mutually inductive definition whose template polymorphism
+                                       on parameter universes has not been checked. *)
+  | TypeInType of GlobRef.t (* a constant which relies on type in type *)
 
 type context_object =
   | Variable of Id.t (* A section variable or a Let definition *)
@@ -206,4 +209,6 @@ module ContextObjectMap : CMap.ExtS
 val pr_assumptionset : env -> evar_map -> types ContextObjectMap.t -> Pp.t
 
 val pr_goal_by_id : proof:Proof.t -> Id.t -> Pp.t
+val pr_goal_emacs : proof:Proof.t option -> int -> int -> Pp.t
 
+val pr_typing_flags : Declarations.typing_flags -> Pp.t

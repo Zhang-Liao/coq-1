@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -110,7 +110,13 @@ let make_coqtop_args fname =
     | None -> args
     | Some fname ->
       if List.exists (String.equal "-top") args then args
-      else "-topfile"::fname::args
+      else
+        (* We basically copy the code of Names.check_valid since it is not exported *)
+        (* to coqide. This is to prevent a possible failure of parsing  "-topfile"  *)
+        (* at initialization of coqtop (see #10286) *)
+        match Unicode.ident_refutation (Filename.chop_extension (Filename.basename fname)) with
+        | Some (_,x) -> output_string stderr (x^"\n"); exit 1
+        | None -> "-topfile"::fname::args
   in
   proj, args
 
@@ -603,9 +609,6 @@ module Nav = struct
   let join_document _ = send_to_coq (fun sn -> sn.coqops#join_document)
 end
 
-let tactic_wizard_callback l _ =
-  send_to_coq (fun sn -> sn.coqops#tactic_wizard l)
-
 let printopts_callback opts v =
   let b = v#get_active in
   let () = List.iter (fun o -> Coq.PrintOpt.set o b) opts in
@@ -881,10 +884,20 @@ let no_under = Util.String.map (fun x -> if x = '_' then '-' else x)
 let alpha_items menu_name item_name l =
   let mk_item text =
     let text' =
-      let last = String.length text - 1 in
-      if text.[last] = '.'
-      then text ^"\n"
-      else text ^" "
+      let len = String.length text in
+      let buf = Buffer.create (len + 1) in
+      let escaped = ref false in
+      String.iter (fun c ->
+          if !escaped then
+            let () = Buffer.add_char buf c in
+            escaped := false
+          else if c = '_' then escaped := true
+          else Buffer.add_char buf c
+        ) text;
+      if text.[len - 1] = '.'
+      then Buffer.add_char buf '\n'
+      else Buffer.add_char buf ' ';
+      Buffer.contents buf
     in
     let callback _ =
       on_current_term (fun sn -> sn.buffer#insert_interactive text')
@@ -1003,7 +1016,7 @@ let build_ui () =
 
   menu edit_menu [
     item "Edit" ~label:"_Edit";
-    item "Undo" ~accel:"<Ctrl>u" ~stock:`UNDO
+    item "Undo" ~accel:"<Primary>u" ~stock:`UNDO
       ~callback:(cb_on_current_term (fun t -> t.script#undo ()));
     item "Redo" ~stock:`REDO
       ~callback:(cb_on_current_term (fun t -> t.script#redo ()));
@@ -1022,7 +1035,7 @@ let build_ui () =
       ~callback:(cb_on_current_term (fun t -> t.finder#find_backward ()));
     item "External editor" ~label:"External editor" ~stock:`EDIT
       ~callback:(External.editor ~parent:w);
-    item "Preferences" ~accel:"<Ctrl>comma" ~stock:`PREFERENCES
+    item "Preferences" ~accel:"<Primary>comma" ~stock:`PREFERENCES
       ~callback:(fun _ ->
         begin
 	  try Preferences.configure ~apply:refresh_notebook_pos w
@@ -1040,19 +1053,19 @@ let build_ui () =
     item "Next tab" ~label:"_Next tab" ~accel:"<Alt>Right"
       ~stock:`GO_FORWARD
       ~callback:(fun _ -> notebook#next_page ());
-    item "Zoom in" ~label:"_Zoom in" ~accel:("<Control>plus")
+    item "Zoom in" ~label:"_Zoom in" ~accel:("<Primary>plus")
         ~stock:`ZOOM_IN ~callback:(fun _ ->
           let ft = Pango.Font.from_string text_font#get in
           Pango.Font.set_size ft (Pango.Font.get_size ft + Pango.scale);
           text_font#set (Pango.Font.to_string ft);
           save_pref ());
-    item "Zoom out" ~label:"_Zoom out" ~accel:("<Control>minus")
+    item "Zoom out" ~label:"_Zoom out" ~accel:("<Primary>minus")
         ~stock:`ZOOM_OUT ~callback:(fun _ ->
           let ft = Pango.Font.from_string text_font#get in
           Pango.Font.set_size ft (Pango.Font.get_size ft - Pango.scale);
           text_font#set (Pango.Font.to_string ft);
           save_pref ());
-    item "Zoom fit" ~label:"_Zoom fit" ~accel:("<Control>0")
+    item "Zoom fit" ~label:"_Zoom fit" ~accel:("<Primary>0")
         ~stock:`ZOOM_FIT ~callback:(cb_on_current_term MiscMenu.zoom_fit);
     toggle_item "Show Toolbar" ~label:"Show _Toolbar"
       ~active:(show_toolbar#get)
@@ -1106,25 +1119,8 @@ let build_ui () =
     ("Force", "_Force", `EXECUTE, Nav.join_document, "Fully check the document", "f");
   ] end;
 
-  let tacitem s sc =
-    item s ~label:("_"^s)
-      ~accel:(modifier_for_tactics#get^sc)
-      ~callback:(tactic_wizard_callback [s])
-  in
   menu tactics_menu [
-    item "Try Tactics" ~label:"_Try Tactics";
-    item "Wizard" ~label:"<Proof Wizard>" ~stock:`DIALOG_INFO
-      ~tooltip:"Proof Wizard" ~accel:(modifier_for_tactics#get^"dollar")
-      ~callback:(tactic_wizard_callback automatic_tactics#get);
-    tacitem "auto" "a";
-    tacitem "auto with *" "asterisk";
-    tacitem "eauto" "e";
-    tacitem "eauto with *" "ampersand";
-    tacitem "intuition" "i";
-    tacitem "omega" "o";
-    tacitem "simpl" "s";
-    tacitem "tauto" "p";
-    tacitem "trivial" "v";
+    item "Tactics" ~label:"_Tactics";
   ];
   alpha_items tactics_menu "Tactic" Coq_commands.tactics;
 
@@ -1251,7 +1247,6 @@ let build_ui () =
   let () = refresh_notebook_pos () in
   let lower_hbox = GPack.hbox ~homogeneous:false ~packing:vbox#pack () in
   let () = lower_hbox#pack ~expand:true status#coerce in
-  let () = push_info ("Ready"^ if microPG#get then ", [μPG]" else "")  in
 
   (* Location display *)
   let l = GMisc.label
@@ -1376,7 +1371,7 @@ let read_coqide_args argv =
     |"-coqtop-flags" :: flags :: args->
       Coq.ideslave_coqtop_flags := Some flags;
       filter_coqtop coqtop project_files bindings_files out args
-    |arg::args when out = [] && Minilib.is_prefix_of "-psn_" arg ->
+    |arg::args when out = [] && CString.is_prefix "-psn_" arg ->
       (* argument added by MacOS during .app launch *)
       filter_coqtop coqtop project_files bindings_files out args
     |arg::args -> filter_coqtop coqtop project_files bindings_files (arg::out) args

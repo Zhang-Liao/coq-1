@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -159,7 +159,6 @@ type 'opaque result = {
   cook_body : (constr Mod_subst.substituted, 'opaque) constant_def;
   cook_type : types;
   cook_universes : universes;
-  cook_private_univs : Univ.ContextSet.t option;
   cook_relevance : Sorts.relevance;
   cook_inline : inline;
   cook_context : Constr.named_context option;
@@ -202,17 +201,30 @@ let lift_univs cb subst auctx0 =
     let subst, auctx = discharge_abstract_universe_context subst auctx0 auctx in
     subst, (Polymorphic auctx)
 
-let cook_constr { Opaqueproof.modlist ; abstract } c =
+let cook_constr { Opaqueproof.modlist ; abstract } (c, priv) =
   let cache = RefTable.create 13 in
   let abstract, usubst, abs_ctx = abstract in
-  (* For now the STM only handles deferred computation of monomorphic
-    constants. The API will need to be adapted when it's not the case
-    anymore. *)
-  let () = assert (AUContext.is_empty abs_ctx) in
+  let usubst, priv = match priv with
+  | Opaqueproof.PrivateMonomorphic () ->
+    let () = assert (AUContext.is_empty abs_ctx) in
+    let () = assert (Instance.is_empty usubst) in
+    usubst, priv
+  | Opaqueproof.PrivatePolymorphic (univs, ctx) ->
+    let ainst = Instance.of_array (Array.init univs Level.var) in
+    let usubst = Instance.append usubst ainst in
+    let ctx = on_snd (Univ.subst_univs_level_constraints (Univ.make_instance_subst usubst)) ctx in
+    let univs = univs + AUContext.size abs_ctx in
+    usubst, Opaqueproof.PrivatePolymorphic (univs, ctx)
+  in
   let expmod = expmod_constr_subst cache modlist usubst in
   let hyps = Context.Named.map expmod abstract in
   let hyps = abstract_context hyps in
-  abstract_constant_body (expmod c) hyps
+  let c = abstract_constant_body (expmod c) hyps in
+  (c, priv)
+
+let cook_constr infos c =
+  let fold info c = cook_constr info c in
+  List.fold_right fold infos c
 
 let cook_constant { from = cb; info } =
   let { Opaqueproof.modlist; abstract } = info in
@@ -227,7 +239,7 @@ let cook_constant { from = cb; info } =
   | Undef _ as x -> x
   | Def cs -> Def (Mod_subst.from_val (map (Mod_subst.force_constr cs)))
   | OpaqueDef o ->
-    OpaqueDef (Opaqueproof.discharge_direct_opaque ~cook_constr:map info o)
+    OpaqueDef (Opaqueproof.discharge_direct_opaque info o)
   | Primitive _ -> CErrors.anomaly (Pp.str "Primitives cannot be cooked")
   in
   let const_hyps =
@@ -236,15 +248,10 @@ let cook_constant { from = cb; info } =
 		  hyps)
       hyps0 ~init:cb.const_hyps in
   let typ = abstract_constant_type (expmod cb.const_type) hyps in
-  let private_univs = Option.map (on_snd (Univ.subst_univs_level_constraints
-                                            (Univ.make_instance_subst usubst)))
-      cb.const_private_poly_univs
-  in
   {
     cook_body = body;
     cook_type = typ;
     cook_universes = univs;
-    cook_private_univs = private_univs;
     cook_relevance = cb.const_relevance;
     cook_inline = cb.const_inline_code;
     cook_context = Some const_hyps;

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -30,10 +30,6 @@
  *)
 
 (** Command-line flags  *)
-
-(** Set by coqtop to tell the kernel to output to the aux file; will
-    be eventually removed by cleanups such as PR#1103 *)
-val record_aux_file : bool ref
 
 (** Async-related flags *)
 val async_proofs_worker_id : string ref

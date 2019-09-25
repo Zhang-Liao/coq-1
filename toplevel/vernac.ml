@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -20,13 +20,9 @@ open Vernacprop
    Use the module Coqtoplevel, which catches these exceptions
    (the exceptions are explained only at the toplevel). *)
 
-let checknav_simple ({ CAst.loc; _ } as cmd) =
-  if is_navigation_vernac cmd && not (is_reset cmd) then
+let checknav { CAst.loc; v = { expr } }  =
+  if is_navigation_vernac expr && not (is_reset expr) then
     CErrors.user_err ?loc (str "Navigation commands forbidden in files.")
-
-let checknav_deep ({ CAst.loc; _ } as cmd) =
-  if is_deep_navigation_vernac cmd then
-    CErrors.user_err ?loc (str "Navigation commands forbidden in nested commands.")
 
 (* Echo from a buffer based on position.
    XXX: Should move to utility file. *)
@@ -60,7 +56,7 @@ let interp_vernac ~check ~interactive ~state ({CAst.loc;_} as com) =
          due to the way it prints. *)
       let com = if state.time
         then begin
-          CAst.make ?loc @@ VernacTime(state.time,com)
+          CAst.map (fun cmd -> { cmd with control = ControlTime state.time :: cmd.control }) com
         end else com in
       let doc, nsid, ntip = Stm.add ~doc:state.doc ~ontop:state.sid (not !Flags.quiet) com in
 
@@ -108,7 +104,7 @@ let load_vernac_core ~echo ~check ~interactive ~state file =
       (* Printing of AST for -compile-verbose *)
       Option.iter (vernac_echo ?loc:ast.CAst.loc) in_echo;
 
-      checknav_simple ast;
+      checknav ast;
 
       let state =
         Flags.silently (interp_vernac ~check ~interactive ~state) ast in
@@ -122,7 +118,6 @@ let load_vernac_core ~echo ~check ~interactive ~state file =
     iraise (e, info)
 
 let process_expr ~state loc_ast =
-  checknav_deep loc_ast;
   interp_vernac ~interactive:true ~check:true ~state loc_ast
 
 (******************************************************************************)
@@ -174,6 +169,6 @@ let beautify_pass ~doc ~comments ~ids ~filename =
 let load_vernac ~echo ~check ~interactive ~state filename =
   let ostate, ids, comments = load_vernac_core ~echo ~check ~interactive ~state filename in
   (* Pass for beautify *)
-  if !Flags.beautify then beautify_pass ~doc:ostate.State.doc ~comments ~ids:List.(rev ids) ~filename;
+  if !Flags.beautify then beautify_pass ~doc:ostate.State.doc ~comments ~ids:(List.rev ids) ~filename;
   (* End pass *)
   ostate

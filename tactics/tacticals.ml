@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -43,12 +43,8 @@ let tclTHENS         = Refiner.tclTHENS
 let tclTHENSV        = Refiner.tclTHENSV
 let tclTHENSFIRSTn   = Refiner.tclTHENSFIRSTn
 let tclTHENSLASTn    = Refiner.tclTHENSLASTn
-let tclTHENFIRSTn    = Refiner.tclTHENFIRSTn
-let tclTHENLASTn     = Refiner.tclTHENLASTn
 let tclREPEAT        = Refiner.tclREPEAT
-let tclREPEAT_MAIN   = Refiner.tclREPEAT_MAIN
 let tclFIRST         = Refiner.tclFIRST
-let tclSOLVE         = Refiner.tclSOLVE
 let tclTRY           = Refiner.tclTRY
 let tclCOMPLETE      = Refiner.tclCOMPLETE
 let tclAT_LEAST_ONCE = Refiner.tclAT_LEAST_ONCE
@@ -58,10 +54,6 @@ let tclDO            = Refiner.tclDO
 let tclPROGRESS      = Refiner.tclPROGRESS
 let tclSHOWHYPS      = Refiner.tclSHOWHYPS
 let tclTHENTRY       = Refiner.tclTHENTRY
-let tclIFTHENELSE    = Refiner.tclIFTHENELSE
-let tclIFTHENSELSE   = Refiner.tclIFTHENSELSE
-let tclIFTHENSVELSE   = Refiner.tclIFTHENSVELSE
-let tclIFTHENTRYELSEMUST = Refiner.tclIFTHENTRYELSEMUST
 
 (************************************************************************)
 (* Tacticals applying on hypotheses                                     *)
@@ -554,7 +546,8 @@ module New = struct
     Proofview.tclOR
       (Proofview.tclTIMEOUT n t)
       begin function (e, info) -> match e with
-        | Proofview.Timeout as e -> Proofview.tclZERO (Refiner.FailError (0,lazy (CErrors.print e)))
+        | Logic_monad.Tac_Timeout as e ->
+          Proofview.tclZERO (Refiner.FailError (0,lazy (CErrors.print e)))
         | e -> Proofview.tclZERO ~info e
       end
 

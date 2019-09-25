@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -14,12 +14,6 @@ open Constrexpr
 open Typeclasses
 open Libnames
 
-(** Errors *)
-
-val mismatched_params : env -> constr_expr list -> Constr.rel_context -> 'a
-
-val mismatched_props : env -> constr_expr list -> Constr.rel_context -> 'a
-
 (** Instance declaration *)
 
 val declare_instance : ?warn:bool -> env -> Evd.evar_map ->
@@ -31,9 +25,9 @@ val declare_instance : ?warn:bool -> env -> Evd.evar_map ->
 val existing_instance : bool -> qualid -> Hints.hint_info_expr option -> unit
 (** globality, reference, optional priority and pattern information *)
 
-val new_instance_interactive :
-  ?global:bool (** Not global by default. *)
-  -> Decl_kinds.polymorphic
+val new_instance_interactive
+  :  ?global:bool (** Not global by default. *)
+  -> poly:bool
   -> name_decl
   -> local_binder_expr list
   -> constr_expr
@@ -41,11 +35,11 @@ val new_instance_interactive :
   -> ?tac:unit Proofview.tactic
   -> ?hook:(GlobRef.t -> unit)
   -> Hints.hint_info_expr
-  -> Id.t * Proof_global.t
+  -> Id.t * Lemmas.t
 
-val new_instance :
-  ?global:bool (** Not global by default. *)
-  -> Decl_kinds.polymorphic
+val new_instance
+  :  ?global:bool (** Not global by default. *)
+  -> poly:bool
   -> name_decl
   -> local_binder_expr list
   -> constr_expr
@@ -55,9 +49,9 @@ val new_instance :
   -> Hints.hint_info_expr
   -> Id.t
 
-val new_instance_program :
-  ?global:bool (** Not global by default. *)
-  -> Decl_kinds.polymorphic
+val new_instance_program
+  : ?global:bool (** Not global by default. *)
+  -> poly:bool
   -> name_decl
   -> local_binder_expr list
   -> constr_expr
@@ -70,7 +64,7 @@ val new_instance_program :
 val declare_new_instance
   : ?global:bool (** Not global by default. *)
   -> program_mode:bool
-  -> Decl_kinds.polymorphic
+  -> poly:bool
   -> ident_decl
   -> local_binder_expr list
   -> constr_expr

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -22,7 +22,6 @@ Section multiset_defs.
   Hypothesis eqA_equiv : Equivalence eqA.
   Hypothesis Aeq_dec : forall x y:A, {eqA x y} + {~ eqA x y}.
 
-  #[universes(template)]
   Inductive multiset : Type :=
     Bag : (A -> nat) -> multiset.
 

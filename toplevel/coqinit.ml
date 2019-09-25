@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -118,7 +118,7 @@ let init_ocaml_path () =
   let open Loadpath in
   let lp s = { recursive = false; path_spec = MlPath s } in
   let add_subdir dl =
-    Loadpath.add_coq_path (lp (List.fold_left (/) Envars.coqroot [dl]))
+    Loadpath.add_coq_path (lp (List.fold_left (/) (Envars.coqlib()) [dl]))
   in
     Loadpath.add_coq_path (lp (Envars.coqlib ()));
     List.iter add_subdir Coq_config.all_src_dirs

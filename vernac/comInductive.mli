@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -10,10 +10,8 @@
 
 open Names
 open Entries
-open Libnames
 open Vernacexpr
 open Constrexpr
-open Decl_kinds
 
 (** {6 Inductive and coinductive types} *)
 
@@ -23,17 +21,30 @@ type uniform_inductive_flag =
   | UniformParameters
   | NonUniformParameters
 
-val do_mutual_inductive :
-  template:bool option -> universe_decl_expr option ->
-  (one_inductive_expr * decl_notation list) list -> cumulative_inductive_flag ->
-  polymorphic -> private_flag -> uniform:uniform_inductive_flag ->
-  Declarations.recursivity_kind -> unit
+val do_mutual_inductive
+  :  template:bool option
+  -> universe_decl_expr option
+  -> (one_inductive_expr * decl_notation list) list
+  -> cumulative:bool
+  -> poly:bool
+  -> private_ind:bool
+  -> uniform:uniform_inductive_flag
+  -> Declarations.recursivity_kind
+  -> unit
+
+(** User-interface API *)
+
+(** Prepare a "match" template for a given inductive type.
+    For each branch of the match, we list the constructor name
+    followed by enough pattern variables.
+    [Not_found] is raised if the given string isn't the qualid of
+    a known inductive type. *)
+
+val make_cases : Names.inductive -> string list list
 
 (************************************************************************)
-(** Internal API  *)
+(** Internal API, exported for Record                                   *)
 (************************************************************************)
-
-(** Exported for Record and Funind *)
 
 (** Registering a mutual inductive definition together with its
    associated schemes *)
@@ -52,28 +63,16 @@ val should_auto_template : Id.t -> bool -> bool
    automatically use template polymorphism. [x] is the name of the
    inductive under consideration. *)
 
-(** Exported for Funind *)
+val template_polymorphism_candidate :
+  Environ.env -> Entries.universes_entry -> Constr.rel_context -> Sorts.t option -> bool
+(** [template_polymorphism_candidate env uctx params conclsort] is
+   [true] iff an inductive with params [params] and conclusion
+   [conclsort] would be definable as template polymorphic.  It should
+   have at least one universe in its monomorphic universe context that
+   can be made parametric in its conclusion sort, if one is given.
+   If the [Template Check] flag is false we just check that the conclusion sort
+   is not small. *)
 
-(** Extracting the semantical components out of the raw syntax of mutual
-   inductive declarations *)
-
-type structured_one_inductive_expr = {
-  ind_name : Id.t;
-  ind_arity : constr_expr;
-  ind_lc : (Id.t * constr_expr) list
-}
-
-type structured_inductive_expr =
-  local_binder_expr list * structured_one_inductive_expr list
-
-val extract_mutual_inductive_declaration_components :
-  (one_inductive_expr * decl_notation list) list ->
-    structured_inductive_expr * (*coercions:*) qualid list * decl_notation list
-
-(** Typing mutual inductive definitions *)
-
-val interp_mutual_inductive :
-  template:bool option -> universe_decl_expr option -> structured_inductive_expr ->
-  decl_notation list -> cumulative_inductive_flag ->
-  polymorphic -> private_flag -> Declarations.recursivity_kind ->
-  mutual_inductive_entry * UnivNames.universe_binders * one_inductive_impls list
+val sign_level : Environ.env -> Evd.evar_map -> Constr.rel_declaration list -> Univ.Universe.t
+(** [sign_level env sigma ctx] computes the universe level of the context [ctx]
+    as the [sup] of its individual assumptions, which should be well-typed in [env] and [sigma] *)

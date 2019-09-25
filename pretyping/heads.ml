@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -41,8 +41,7 @@ let rec compute_head env = function
      | Some c -> kind_of_head env c)
   | EvalVarRef id ->
     (match lookup_named id env with
-     | LocalDef (_,c,_) when not (Decls.variable_opacity id) ->
-       kind_of_head env c
+     | LocalDef (_,c,_) -> kind_of_head env c
      | _ -> RigidHead RigidOther)
 
 and kind_of_head env t =

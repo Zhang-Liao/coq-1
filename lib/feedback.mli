@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -74,13 +74,8 @@ val feedback : ?did:doc_id -> ?id:Stateid.t -> ?route:route_id -> feedback_conte
 (** [set_id_for_feedback route id] Set the defaults for feedback *)
 val set_id_for_feedback : ?route:route_id -> doc_id -> Stateid.t -> unit
 
-(** {6 output functions}
+(** {6 output functions} *)
 
-[msg_notice] do not put any decoration on output by default. If
-possible don't mix it with goal output (prefer msg_info or
-msg_warning) so that interfaces can dispatch outputs easily. Once all
-interfaces use the xml-like protocol this constraint can be
-relaxed. *)
 (* Should we advertise these functions more? Should they be the ONLY
    allowed way to output something? *)
 

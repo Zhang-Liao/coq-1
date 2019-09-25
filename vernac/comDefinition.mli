@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -9,18 +9,18 @@
 (************************************************************************)
 
 open Names
-open Entries
-open Decl_kinds
 open Redexpr
 open Constrexpr
 
 (** {6 Definitions/Let} *)
 
 val do_definition
-  : program_mode:bool
-  -> ?hook:Lemmas.declaration_hook
-  -> Id.t
-  -> definition_kind
+  :  program_mode:bool
+  -> ?hook:DeclareDef.Hook.t
+  -> name:Id.t
+  -> scope:DeclareDef.locality
+  -> poly:bool
+  -> kind:Decls.definition_object_kind
   -> universe_decl_expr option
   -> local_binder_expr list
   -> red_expr option
@@ -33,7 +33,13 @@ val do_definition
 (************************************************************************)
 
 (** Not used anywhere. *)
-val interp_definition : program_mode:bool ->
-  universe_decl_expr option -> local_binder_expr list -> polymorphic -> red_expr option -> constr_expr ->
-  constr_expr option -> Safe_typing.private_constants definition_entry * Evd.evar_map *
-                        UState.universe_decl * Impargs.manual_implicits
+val interp_definition
+  :  program_mode:bool
+  -> universe_decl_expr option
+  -> local_binder_expr list
+  -> poly:bool
+  -> red_expr option
+  -> constr_expr
+  -> constr_expr option
+  -> Evd.side_effects Declare.proof_entry *
+     Evd.evar_map * UState.universe_decl * Impargs.manual_implicits

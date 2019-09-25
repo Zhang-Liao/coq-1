@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -50,6 +50,9 @@ sig
 
   val is_sub : string -> string -> int -> bool
   (** [is_sub p s off] tests whether [s] contains [p] at offset [off]. *)
+
+  val is_prefix : string -> string -> bool
+  (** [is_prefix p s] tests whether [p] is a prefix of [s]. *)
 
   (** {6 Generic operations} **)
 

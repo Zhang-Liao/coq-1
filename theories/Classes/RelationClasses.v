@@ -1,7 +1,7 @@
 (* -*- coding: utf-8 -*- *)
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -286,7 +286,6 @@ Local Open Scope list_scope.
 (** A compact representation of non-dependent arities, with the codomain singled-out. *)
 
 (* Note, we do not use [list Type] because it imposes unnecessary universe constraints *)
-#[universes(template)]
 Inductive Tlist : Type := Tnil : Tlist | Tcons : Type -> Tlist -> Tlist.
 Local Infix "::" := Tcons.
 

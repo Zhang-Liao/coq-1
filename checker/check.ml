@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -51,7 +51,7 @@ let pr_path sp =
 type compilation_unit_name = DirPath.t
 
 type seg_univ = Univ.ContextSet.t * bool
-type seg_proofs = Constr.constr option array
+type seg_proofs = Opaqueproof.opaque_proofterm array
 
 type library_t = {
   library_name : compilation_unit_name;
@@ -66,7 +66,7 @@ module LibraryOrdered =
   struct
     type t = DirPath.t
     let compare d1 d2 =
-      Pervasives.compare
+      compare
         (List.rev (DirPath.repr d1)) (List.rev (DirPath.repr d2))
   end
 
@@ -100,7 +100,14 @@ let access_opaque_table dp i =
   assert (i < Array.length t);
   t.(i)
 
-let () = Mod_checking.set_indirect_accessor access_opaque_table
+let access_discharge = Cooking.cook_constr
+
+let indirect_accessor = {
+  Opaqueproof.access_proof = access_opaque_table;
+  Opaqueproof.access_discharge = access_discharge;
+}
+
+let () = Mod_checking.set_indirect_accessor indirect_accessor
 
 let check_one_lib admit senv (dir,m) =
   let md = m.library_compiled in
@@ -255,7 +262,6 @@ let raw_intern_library f =
 
 type summary_disk = {
   md_name : compilation_unit_name;
-  md_imports : compilation_unit_name array;
   md_deps : (compilation_unit_name * Safe_typing.vodigest) array;
 }
 
@@ -327,7 +333,6 @@ let intern_from_file ~intern_mode (dir, f) =
       let (sd:summary_disk), _, digest = marshal_in_segment f ch in
       let (md:library_disk), _, digest = marshal_in_segment f ch in
       let (opaque_csts:seg_univ option), _, udg = marshal_in_segment f ch in
-      let (discharging:'a option), _, _ = marshal_in_segment f ch in
       let (tasks:'a option), _, _ = marshal_in_segment f ch in
       let (table:seg_proofs option), pos, checksum =
         marshal_or_skip ~intern_mode f ch in
@@ -340,7 +345,7 @@ let intern_from_file ~intern_mode (dir, f) =
       if dir <> sd.md_name then
         user_err ~hdr:"intern_from_file"
           (name_clash_message dir sd.md_name f);
-      if tasks <> None || discharging <> None then
+      if tasks <> None then
         user_err ~hdr:"intern_from_file"
           (str "The file "++str f++str " contains unfinished tasks");
       if opaque_csts <> None then begin
@@ -371,7 +376,7 @@ let intern_from_file ~intern_mode (dir, f) =
 let get_deps (dir, f) =
   try LibraryMap.find dir !depgraph
   with Not_found ->
-    let _ = intern_from_file (dir,f) in
+    let _ = intern_from_file ~intern_mode:Dep (dir,f) in
     LibraryMap.find dir !depgraph
 
 (* Read a compiled library and all dependencies, in reverse order.

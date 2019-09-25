@@ -1,14 +1,17 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2017     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 open Lexing
 open Coqpp_ast
 open Format
+open Coqpp_parser
 
 let fatal msg =
   let () = Format.eprintf "Error: %s@\n%!" msg in
@@ -17,39 +20,12 @@ let fatal msg =
 let dummy_loc = { loc_start = Lexing.dummy_pos; loc_end = Lexing.dummy_pos }
 let mk_code s = { code = s; loc = dummy_loc }
 
-let pr_loc loc =
-  let file = loc.loc_start.pos_fname in
-  let line = loc.loc_start.pos_lnum in
-  let bpos = loc.loc_start.pos_cnum - loc.loc_start.pos_bol in
-  let epos = loc.loc_end.pos_cnum - loc.loc_start.pos_bol in
-  Printf.sprintf "File \"%s\", line %d, characters %d-%d:" file line bpos epos
-
 let print_code fmt c =
   let loc = c.loc.loc_start in
   (* Print the line location as a source annotation *)
   let padding = String.make (loc.pos_cnum - loc.pos_bol + 1) ' ' in
   let code_insert = asprintf "\n# %i \"%s\"\n%s%s" loc.pos_lnum loc.pos_fname padding c.code in
   fprintf fmt "@[@<0>%s@]@\n" code_insert
-
-let parse_file f =
-  let chan = open_in f in
-  let lexbuf = Lexing.from_channel chan in
-  let () = lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = f } in
-  let ans =
-    try Coqpp_parse.file Coqpp_lex.token lexbuf
-    with
-    | Coqpp_lex.Lex_error (loc, msg) ->
-      let () = close_in chan in
-      let () = Printf.eprintf "%s\n%!" (pr_loc loc) in
-      fatal msg
-    | Parsing.Parse_error ->
-      let () = close_in chan in
-      let loc = Coqpp_lex.loc lexbuf in
-      let () = Printf.eprintf "%s\n%!" (pr_loc loc) in
-      fatal "syntax error"
-  in
-  let () = close_in chan in
-  ans
 
 module StringSet = Set.Make(String)
 

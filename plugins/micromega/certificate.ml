@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -93,7 +93,7 @@ let dev_form n_spec  p =
 
 let rec fixpoint f x =
   let y' = f x in
-  if Pervasives.(=) y' x then y'
+  if (=) y' x then y'
   else fixpoint f y'
 
 let  rec_simpl_cone n_spec e = 

@@ -2,7 +2,6 @@ open Names
 open Pp
 open Constr
 open Libnames
-open Globnames
 open Refiner
 
 let mk_prefix pre id = Id.of_string (pre^(Id.to_string id))
@@ -11,8 +10,7 @@ let mk_correct_id id = Nameops.add_suffix (mk_rel_id id) "_correct"
 let mk_complete_id id = Nameops.add_suffix (mk_rel_id id) "_complete"
 let mk_equation_id id = Nameops.add_suffix id "_equation"
 
-let msgnl m =
-  ()
+let msgnl m = ()
 
 let fresh_id avoid s = Namegen.next_ident_away_in_goal (Id.of_string s) (Id.Set.of_list avoid)
 
@@ -31,28 +29,30 @@ let locate qid = Nametab.locate qid
 
 let locate_ind ref =
   match locate ref with
-    | IndRef x -> x
+    | GlobRef.IndRef x -> x
     | _ -> raise Not_found
 
 let locate_constant ref =
   match locate ref with
-    | ConstRef x -> x
+    | GlobRef.ConstRef x -> x
     | _ -> raise Not_found
 
 
 let locate_with_msg msg f x =
   try f x
-  with Not_found -> raise (CErrors.UserError(None, msg))
+  with
+  | Not_found ->
+    CErrors.user_err msg
 
 
 let filter_map filter f =
   let rec it = function
     | [] -> []
     | e::l ->
-	if filter e
-	then
-	  (f e) :: it l
-	else it l
+        if filter e
+        then
+          (f e) :: it l
+        else it l
   in
   it
 
@@ -62,12 +62,11 @@ let chop_rlambda_n  =
       if n == 0
       then List.rev acc,rt
       else
-	match DAst.get rt with
-	  | Glob_term.GLambda(name,k,t,b) -> chop_lambda_n ((name,t,None)::acc) (n-1) b
-	  | Glob_term.GLetIn(name,v,t,b) -> chop_lambda_n ((name,v,t)::acc) (n-1) b
-	  | _ ->
-	      raise (CErrors.UserError(Some "chop_rlambda_n",
-				    str "chop_rlambda_n: Not enough Lambdas"))
+        match DAst.get rt with
+          | Glob_term.GLambda(name,k,t,b) -> chop_lambda_n ((name,t,None)::acc) (n-1) b
+          | Glob_term.GLetIn(name,v,t,b) -> chop_lambda_n ((name,v,t)::acc) (n-1) b
+          | _ ->
+            CErrors.user_err ~hdr:"chop_rlambda_n" (str "chop_rlambda_n: Not enough Lambdas")
   in
   chop_lambda_n []
 
@@ -76,9 +75,10 @@ let chop_rprod_n  =
       if n == 0
       then List.rev acc,rt
       else
-	match DAst.get rt with
-	  | Glob_term.GProd(name,k,t,b) -> chop_prod_n ((name,t)::acc) (n-1) b
-	  | _ -> raise (CErrors.UserError(Some "chop_rprod_n",str "chop_rprod_n: Not enough products"))
+        match DAst.get rt with
+          | Glob_term.GProd(name,k,t,b) -> chop_prod_n ((name,t)::acc) (n-1) b
+          | _ ->
+            CErrors.user_err ~hdr:"chop_rprod_n" (str "chop_rprod_n: Not enough products")
   in
   chop_prod_n []
 
@@ -94,13 +94,6 @@ let list_union_eq eq_fun l1 l2 =
 let list_add_set_eq eq_fun x l =
   if List.exists (eq_fun x) l then l else x::l
 
-let const_of_id id =
-  let princ_ref = qualid_of_ident id in
-  try Constrintern.locate_reference princ_ref
-  with Not_found ->
-    CErrors.user_err ~hdr:"IndFun.const_of_id"
-      (str "cannot find " ++ Id.print id)
-
 [@@@ocaml.warning "-3"]
 let coq_constant s =
   UnivGen.constr_of_monomorphic_global @@
@@ -113,38 +106,6 @@ let find_reference sl s =
 
 let eq = lazy(EConstr.of_constr (coq_constant "eq"))
 let refl_equal = lazy(EConstr.of_constr (coq_constant "eq_refl"))
-
-(*****************************************************************)
-(* Copy of the standard save mechanism but without the much too  *)
-(* slow reduction function                                       *)
-(*****************************************************************)
-open Entries
-open Decl_kinds
-open Declare
-
-let definition_message = Declare.definition_message
-
-let get_locality = function
-| Discharge -> true
-| Local -> true
-| Global -> false
-
-let save id const ?hook uctx (locality,_,kind) =
-  let fix_exn = Future.fix_exn_of const.const_entry_body in
-  let l,r = match locality with
-    | Discharge when Lib.sections_are_opened () ->
-        let k = Kindops.logical_kind_of_goal_kind kind in
-	let c = SectionLocalDef const in
-	let _ = declare_variable id (Lib.cwd(), c, k) in
-	(Local, VarRef id)
-    | Discharge | Local | Global ->
-        let local = get_locality locality in
-        let k = Kindops.logical_kind_of_goal_kind kind in
-        let kn = declare_constant id ~local (DefinitionEntry const, k) in
-	(locality, ConstRef kn)
-  in
-  Lemmas.call_hook ?hook ~fix_exn uctx [] l r;
-  definition_message id
 
 let with_full_print f a =
   let old_implicit_args = Impargs.is_implicit_args ()
@@ -172,14 +133,14 @@ let with_full_print f a =
     res
   with
     | reraise ->
-	Impargs.make_implicit_args old_implicit_args;
-	Impargs.make_strict_implicit_args old_strict_implicit_args;
-	Impargs.make_contextual_implicit_args old_contextual_implicit_args;
-	Flags.raw_print := old_rawprint;
-	Constrextern.print_universes := old_printuniverses;
+        Impargs.make_implicit_args old_implicit_args;
+        Impargs.make_strict_implicit_args old_strict_implicit_args;
+        Impargs.make_contextual_implicit_args old_contextual_implicit_args;
+        Flags.raw_print := old_rawprint;
+        Constrextern.print_universes := old_printuniverses;
         Detyping.print_allow_match_default_clause := old_printallowmatchdefaultclause;
-	Dumpglob.continue ();
-	raise reraise
+        Dumpglob.continue ();
+        raise reraise
 
 
 
@@ -219,8 +180,8 @@ let rec do_cache_info finfo = function
       else if finfo'.function_constant = finfo.function_constant
       then finfo::finfos
       else
-	let res = do_cache_info finfo finfos in
-	if res == finfos then l else  finfo'::l
+        let res = do_cache_info finfo finfos in
+        if res == finfos then l else  finfo'::l
 
 
 let cache_Function (_,(finfos)) =
@@ -284,7 +245,7 @@ let pr_info env sigma f_info =
   str "function_constant_type := " ++
   (try
      Printer.pr_lconstr_env env sigma
-       (fst (Typeops.type_of_global_in_context env (ConstRef f_info.function_constant)))
+       (fst (Typeops.type_of_global_in_context env (GlobRef.ConstRef f_info.function_constant)))
    with e when CErrors.noncritical e -> mt ()) ++ fnl () ++
   str "equation_lemma := " ++ pr_ocst env sigma f_info.equation_lemma ++ fnl () ++
   str "completeness_lemma :=" ++ pr_ocst env sigma f_info.completeness_lemma ++ fnl () ++
@@ -308,23 +269,19 @@ let in_Function : function_info -> Libobject.obj =
 
 let find_or_none id =
   try Some
-    (match Nametab.locate (qualid_of_ident id) with ConstRef c -> c | _ -> CErrors.anomaly (Pp.str "Not a constant.")
+    (match Nametab.locate (qualid_of_ident id) with GlobRef.ConstRef c -> c | _ -> CErrors.anomaly (Pp.str "Not a constant.")
     )
   with Not_found -> None
 
-
-
 let find_Function_infos f =
-  Cmap_env.find f !from_function
-
+  Cmap_env.find_opt f !from_function
 
 let find_Function_of_graph ind =
-  Indmap.find ind !from_graph
+  Indmap.find_opt ind !from_graph
 
 let update_Function finfo =
   (* Pp.msgnl (pr_info finfo); *)
   Lib.add_anonymous_leaf (in_Function finfo)
-			 
 
 let add_Function is_general f =
   let f_id = Label.to_id (Constant.label f) in
@@ -337,7 +294,7 @@ let add_Function is_general f =
   and sprop_lemma = find_or_none (Nameops.add_suffix f_id "_sind")
   and graph_ind =
     match Nametab.locate (qualid_of_ident (mk_rel_id f_id))
-    with | IndRef ind -> ind | _ -> CErrors.anomaly (Pp.str "Not an inductive.")
+    with | GlobRef.IndRef ind -> ind | _ -> CErrors.anomaly (Pp.str "Not an inductive.")
   in
   let finfos =
     { function_constant = f;
@@ -362,7 +319,7 @@ let functional_induction_rewrite_dependent_proofs = ref true
 let function_debug = ref false
 open Goptions
 
-let functional_induction_rewrite_dependent_proofs_sig = 
+let functional_induction_rewrite_dependent_proofs_sig =
   {
     optdepr = false;
     optname = "Functional Induction Rewrite Dependent";
@@ -386,9 +343,75 @@ let function_debug_sig =
 let () = declare_bool_option function_debug_sig
 
 
-let do_observe () = !function_debug 
+let do_observe () = !function_debug
 
+let observe strm =
+  if do_observe ()
+  then Feedback.msg_debug strm
+  else ()
 
+let debug_queue = Stack.create ()
+
+let print_debug_queue b e =
+  if not (Stack.is_empty debug_queue)
+  then
+    let lmsg,goal = Stack.pop debug_queue in
+    (if b then
+       Feedback.msg_debug (hov 1 (lmsg ++ (str " raised exception " ++ CErrors.print e) ++ str " on goal" ++ fnl() ++ goal))
+     else
+       Feedback.msg_debug (hov 1 (str " from " ++ lmsg ++ str " on goal"++fnl() ++ goal))
+       (* print_debug_queue false e; *)
+    )
+
+let do_observe_tac s tac g =
+  let goal = Printer.pr_goal g in
+  let s = s (pf_env g) (project g) in
+  let lmsg = (str "observation : ") ++ s in
+  Stack.push (lmsg,goal) debug_queue;
+  try
+    let v = tac g in
+    ignore(Stack.pop debug_queue);
+    v
+  with reraise ->
+    let reraise = CErrors.push reraise in
+    if not (Stack.is_empty debug_queue)
+    then print_debug_queue true (fst reraise);
+    Util.iraise reraise
+
+let observe_tac s tac g =
+  if do_observe ()
+  then do_observe_tac s tac g
+  else tac g
+
+module New = struct
+
+let do_observe_tac ~header s tac =
+  let open Proofview.Notations in
+  let open Proofview in
+  Goal.enter begin fun gl ->
+    let goal = Printer.pr_goal (Goal.print gl) in
+    let env, sigma = Goal.env gl, Goal.sigma gl in
+    let s = s env sigma in
+    let lmsg = seq [header; str " : " ++ s] in
+    tclLIFT (NonLogical.make (fun () ->
+        Feedback.msg_debug (s++fnl()))) >>= fun () ->
+    tclOR (
+      Stack.push (lmsg, goal) debug_queue;
+      tac >>= fun v ->
+      ignore(Stack.pop debug_queue);
+      Proofview.tclUNIT v)
+      (fun (exn, info) ->
+         if not (Stack.is_empty debug_queue)
+         then print_debug_queue true exn;
+         tclZERO ~info exn)
+  end
+
+let observe_tac ~header s tac =
+  if do_observe ()
+  then do_observe_tac ~header s tac
+  else tac
+
+end
 
 let strict_tcc = ref false
 let is_strict_tcc () = !strict_tcc
@@ -440,10 +463,14 @@ let well_founded_ltof () = EConstr.of_constr @@ UnivGen.constr_of_monomorphic_gl
 
 let ltof_ref = function  () -> (find_reference ["Coq";"Arith";"Wf_nat"] "ltof")
 
+let make_eq () =
+  try EConstr.of_constr (UnivGen.constr_of_monomorphic_global (Coqlib.lib_ref "core.eq.type"))
+  with _ -> assert false
+
 let evaluable_of_global_reference r = (* Tacred.evaluable_of_global_reference (Global.env ()) *)
   match r with
-      ConstRef sp -> EvalConstRef sp
-    | VarRef id -> EvalVarRef id
+      GlobRef.ConstRef sp -> EvalConstRef sp
+    | GlobRef.VarRef id -> EvalVarRef id
     | _ -> assert false;;
 
 let list_rewrite (rev:bool) (eqs: (EConstr.constr*bool) list) =

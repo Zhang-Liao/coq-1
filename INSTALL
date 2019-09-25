@@ -1,37 +1,15 @@
-
-            INSTALLATION PROCEDURE
-            ----------------------
+            INSTALLING FROM SOURCES
+            -----------------------
 
 
 WHAT DO YOU NEED ?
 ==================
 
-   Your OS may already contain Coq under the form of a precompiled
-   package or ready-to-compile port. In this case, and if the supplied
-   version suits you, follow the usual procedure for your OS to
-   install it. E.g.:
-
-   - Debian GNU/Linux derivatives (or Debian GNU/k*BSD or ...):
-
-     aptitude install coq
-
-   - Gentoo GNU/Linux:
-
-     emerge sci-mathematics/coq
-
-   - Fedora GNU/Linux:
-
-     urpmi coq
-
-   - MacPorts for MacOS X
-
-     port install coq
-
    To compile Coq yourself, you need:
 
    - OCaml (version >= 4.05.0)
      (available at https://ocaml.org/)
-     (This version of Coq has been tested up to OCaml 4.07.0)
+     (This version of Coq has been tested up to OCaml 4.08.1)
 
    - The Num package, which used to be part of the OCaml standard library,
      if you are using an OCaml version >= 4.06.0
@@ -50,10 +28,15 @@ WHAT DO YOU NEED ?
    findlib/ocamlfind as Coq's makefile will use it to locate the
    libraries during the build.
 
+   Debian / Ubuntu users can get the necessary system packages for
+   CoqIDE with:
+
+   $ sudo apt-get install libgtksourceview-3.0-dev
+
    Opam (https://opam.ocaml.org/) is recommended to install OCaml and
    the corresponding packages.
 
-   $ opam install num ocamlfind lablgtk conf-gtksourceview
+   $ opam install num ocamlfind lablgtk3-sourceview3
 
    should get you a reasonable OCaml environment to compile Coq.
 

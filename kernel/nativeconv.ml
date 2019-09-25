@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -154,7 +154,7 @@ let native_conv_gen pb sigma env univs t1 t2 =
   let fn = compile ml_filename code ~profile:false in
   if !Flags.debug then Feedback.msg_debug (Pp.str "Running test...");
   let t0 = Sys.time () in
-  call_linker ~fatal:true prefix fn (Some upds);
+  call_linker env ~fatal:true ~prefix fn (Some upds);
   let t1 = Sys.time () in
   let time_info = Format.sprintf "Evaluation done in %.5f@." (t1 -. t0) in
   if !Flags.debug then Feedback.msg_debug (Pp.str time_info);

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -64,7 +64,7 @@ END
 TACTIC EXTEND newfuninv
 | [ "functional" "inversion"  quantified_hypothesis(hyp) reference_opt(fname) ] ->
      {
-       Proofview.V82.tactic (Invfun.invfun hyp fname)
+       Invfun.invfun hyp fname
      }
 END
 
@@ -83,7 +83,7 @@ let out_disjunctive = CAst.map (function
 
 }
 
-ARGUMENT EXTEND with_names TYPED AS intropattern option PRINTED BY { pr_intro_as_pat }
+ARGUMENT EXTEND with_names TYPED AS intro_pattern option PRINTED BY { pr_intro_as_pat }
 | [ "as"  simple_intropattern(ipat) ] -> { Some ipat }
 | []  -> { None }
 END
@@ -91,7 +91,7 @@ END
 {
 
 let functional_induction b c x pat =
-  Proofview.V82.tactic (functional_induction true c x (Option.map out_disjunctive pat))
+  functional_induction true c x (Option.map out_disjunctive pat)
 
 }
 
@@ -148,9 +148,7 @@ END
 module Vernac = Pvernac.Vernac_
 module Tactic = Pltac
 
-type function_rec_definition_loc_argtype = (Vernacexpr.fixpoint_expr * Vernacexpr.decl_notation list) Loc.located
-
-let (wit_function_rec_definition_loc : function_rec_definition_loc_argtype Genarg.uniform_genarg_type) =
+let (wit_function_rec_definition_loc : Vernacexpr.fixpoint_expr Loc.located Genarg.uniform_genarg_type) =
   Genarg.create_arg "function_rec_definition_loc"
 
 let function_rec_definition_loc =
@@ -175,25 +173,25 @@ let () =
 
 let is_proof_termination_interactively_checked recsl =
   List.exists (function
-  | _,((_,( Some { CAst.v = CMeasureRec _ }
-          | Some { CAst.v = CWfRec _}),_,_,_),_) -> true
-  | _,((_,Some { CAst.v = CStructRec _ },_,_,_),_)
-  | _,((_,None,_,_,_),_) -> false) recsl
+  | _,( Vernacexpr.{ rec_order = Some { CAst.v = CMeasureRec _ } }
+      | Vernacexpr.{ rec_order = Some { CAst.v = CWfRec _} }) -> true
+  | _, Vernacexpr.{ rec_order = Some { CAst.v = CStructRec _ } }
+  | _, Vernacexpr.{ rec_order = None } -> false) recsl
 
 let classify_as_Fixpoint recsl =
  Vernac_classifier.classify_vernac
-    (Vernacexpr.(CAst.make @@ VernacExpr([], VernacFixpoint(Decl_kinds.NoDischarge, List.map snd recsl))))
+    (Vernacexpr.(CAst.make @@ { control = []; attrs = []; expr = VernacFixpoint(NoDischarge, List.map snd recsl)}))
 
 let classify_funind recsl =
   match classify_as_Fixpoint recsl with
-  | Vernacextend.VtSideff ids, _
+  | Vernacextend.VtSideff (ids, _)
     when is_proof_termination_interactively_checked recsl ->
-      Vernacextend.(VtStartProof (GuaranteesOpacity, ids), VtLater)
+      Vernacextend.(VtStartProof (GuaranteesOpacity, ids))
   | x -> x
 
 let is_interactive recsl =
   match classify_funind recsl with
-  | Vernacextend.VtStartProof _, _ -> true
+  | Vernacextend.VtStartProof _ -> true
   | _ -> false
 
 }
@@ -204,10 +202,10 @@ VERNAC COMMAND EXTEND Function STATE CUSTOM
     -> {
          if is_interactive recsl then
            Vernacextend.VtOpenProof (fun () ->
-             do_generate_principle_interactive (List.map snd recsl))
+             Gen_principle.do_generate_principle_interactive (List.map snd recsl))
          else
            Vernacextend.VtDefault (fun () ->
-             do_generate_principle (List.map snd recsl)) }
+             Gen_principle.do_generate_principle (List.map snd recsl)) }
 END
 
 {
@@ -227,37 +225,36 @@ END
 {
 
 let warning_error names e =
-  let (e, _) = ExplainErr.process_vernac_interp_error (e, Exninfo.null) in
   match e with
-    | Building_graph e ->
-       let names = pr_enum Libnames.pr_qualid names in
-       let error = if do_observe () then (spc () ++ CErrors.print e) else mt () in
-       warn_cannot_define_graph (names,error)
-    | Defining_principle e ->
-       let names = pr_enum Libnames.pr_qualid names in
-       let error = if do_observe () then CErrors.print e else mt () in
-       warn_cannot_define_principle (names,error)
-    | _ -> raise e
+  | Building_graph e ->
+    let names = pr_enum Libnames.pr_qualid names in
+    let error = if do_observe () then (spc () ++ CErrors.print e) else mt () in
+    Gen_principle.warn_cannot_define_graph (names,error)
+  | Defining_principle e ->
+    let names = pr_enum Libnames.pr_qualid names in
+    let error = if do_observe () then CErrors.print e else mt () in
+    Gen_principle.warn_cannot_define_principle (names,error)
+  | _ -> raise e
 
 }
 
 VERNAC COMMAND EXTEND NewFunctionalScheme
 | ["Functional" "Scheme" ne_fun_scheme_arg_list_sep(fas,"with") ]
-   => { Vernacextend.(VtSideff(List.map pi1 fas), VtLater) }
+   => { Vernacextend.(VtSideff(List.map pi1 fas, VtLater)) }
    ->
     { begin
         try
-          Functional_principles_types.build_scheme fas
+          Gen_principle.build_scheme fas
         with
-        | Functional_principles_types.No_graph_found ->
+        | Gen_principle.No_graph_found ->
           begin
             match fas with
             | (_,fun_name,_)::_ ->
               begin
-                make_graph (Smartlocate.global_with_alias fun_name);
-                try Functional_principles_types.build_scheme fas
+                Gen_principle.make_graph (Smartlocate.global_with_alias fun_name);
+                try Gen_principle.build_scheme fas
                 with
-                | Functional_principles_types.No_graph_found ->
+                | Gen_principle.No_graph_found ->
                   CErrors.user_err Pp.(str "Cannot generate induction principle(s)")
                 | e when CErrors.noncritical e ->
                   let names = List.map (fun (_,na,_) -> na) fas in
@@ -275,12 +272,12 @@ END
 
 VERNAC COMMAND EXTEND NewFunctionalCase
 | ["Functional" "Case" fun_scheme_arg(fas) ]
-  => { Vernacextend.(VtSideff[pi1 fas], VtLater) }
-  -> { Functional_principles_types.build_case_scheme fas }
+  => { Vernacextend.(VtSideff([pi1 fas], VtLater)) }
+  -> { Gen_principle.build_case_scheme fas }
 END
 
 (***** debug only ***)
 VERNAC COMMAND EXTEND GenerateGraph CLASSIFIED AS QUERY
 | ["Generate" "graph" "for" reference(c)] ->
-  { make_graph (Smartlocate.global_with_alias c) }
+  { Gen_principle.make_graph (Smartlocate.global_with_alias c) }
 END

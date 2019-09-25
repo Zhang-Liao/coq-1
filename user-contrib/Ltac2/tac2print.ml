@@ -1,9 +1,11 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 open Util
@@ -471,8 +473,7 @@ end
 
 let () = register_init "err" begin fun _ _ e ->
   let e = to_ext val_exn e in
-  let (e, _) = ExplainErr.process_vernac_interp_error ~allow_uncaught:true e in
-  str "err:(" ++ CErrors.print_no_report e ++ str ")"
+  str "err:(" ++ CErrors.iprint e ++ str ")"
 end
 
 let () =

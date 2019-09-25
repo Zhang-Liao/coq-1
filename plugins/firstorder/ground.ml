@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,12 +15,11 @@ open Rules
 open Instances
 open Tacmach.New
 open Tacticals.New
-open Globnames
 
 let update_flags ()=
   let open TransparentState in
   let f accu coe = match coe.Classops.coe_value with
-    | ConstRef kn -> { accu with tr_cst = Names.Cpred.remove kn accu.tr_cst }
+    | Names.GlobRef.ConstRef kn -> { accu with tr_cst = Names.Cpred.remove kn accu.tr_cst }
     | _ -> accu
   in
   let flags = List.fold_left f TransparentState.full (Classops.coercions ()) in

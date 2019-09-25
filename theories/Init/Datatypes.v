@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -243,6 +243,19 @@ Proof.
   rewrite Hfst; rewrite Hsnd; reflexivity.
 Qed.
 
+Lemma pair_equal_spec :
+  forall (A B : Type) (a1 a2 : A) (b1 b2 : B),
+    (a1, b1) = (a2, b2) <-> a1 = a2 /\ b1 = b2.
+Proof with auto.
+  split; intros.
+  - split.
+    + replace a1 with (fst (a1, b1)); replace a2 with (fst (a2, b2))...
+      rewrite H...
+    + replace b1 with (snd (a1, b1)); replace b2 with (snd (a2, b2))...
+      rewrite H...
+  - destruct H; subst...
+Qed.
+
 Definition prod_uncurry (A B C:Type) (f:A * B -> C)
   (x:A) (y:B) : C := f (x,y).
 
@@ -387,8 +400,10 @@ Proof. intros. apply CompareSpec2Type; assumption. Defined.
 (** [identity A a] is the family of datatypes on [A] whose sole non-empty
     member is the singleton datatype [identity A a a] whose
     sole inhabitant is denoted [identity_refl A a] *)
+(** Beware: this inductive actually falls into [Prop], as the sole
+    constructor has no arguments and [-indices-matter] is not
+    activated in the standard library. *)
 
-#[universes(template)]
 Inductive identity (A:Type) (a:A) : A -> Type :=
   identity_refl : identity a a.
 Hint Resolve identity_refl: core.

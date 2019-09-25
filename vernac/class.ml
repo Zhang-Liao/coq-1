@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -17,12 +17,9 @@ open Constr
 open Context
 open Vars
 open Termops
-open Entries
 open Environ
 open Classops
 open Declare
-open Globnames
-open Decl_kinds
 open Libobject
 
 let strength_min l = if List.mem `LOCAL l then `LOCAL else `GLOBAL
@@ -73,10 +70,10 @@ let check_reference_arity ref =
 
 let check_arity = function
   | CL_FUN | CL_SORT -> ()
-  | CL_CONST cst -> check_reference_arity (ConstRef cst)
-  | CL_PROJ p -> check_reference_arity (ConstRef (Projection.Repr.constant p))
-  | CL_SECVAR id -> check_reference_arity (VarRef id)
-  | CL_IND kn -> check_reference_arity (IndRef kn)
+  | CL_CONST cst -> check_reference_arity (GlobRef.ConstRef cst)
+  | CL_PROJ p -> check_reference_arity (GlobRef.ConstRef (Projection.Repr.constant p))
+  | CL_SECVAR id -> check_reference_arity (GlobRef.VarRef id)
+  | CL_IND kn -> check_reference_arity (GlobRef.IndRef kn)
 
 (* Coercions *)
 
@@ -92,12 +89,12 @@ let uniform_cond sigma ctx lt =
     lt (Context.Rel.to_extended_list EConstr.mkRel 0 ctx)
 
 let class_of_global = function
-  | ConstRef sp -> 
+  | GlobRef.ConstRef sp ->
     (match Recordops.find_primitive_projection sp with
      | Some p -> CL_PROJ p | None -> CL_CONST sp)
-  | IndRef sp -> CL_IND sp
-  | VarRef id -> CL_SECVAR id
-  | ConstructRef _ as c ->
+  | GlobRef.IndRef sp -> CL_IND sp
+  | GlobRef.VarRef id -> CL_SECVAR id
+  | GlobRef.ConstructRef _ as c ->
       user_err ~hdr:"class_of_global"
 	(str "Constructors, such as " ++ Printer.pr_global c ++
 	   str ", cannot be used as a class.")
@@ -154,7 +151,7 @@ let strength_of_cl = function
   | _ -> `GLOBAL
 
 let strength_of_global = function
-  | VarRef _ -> `LOCAL
+  | GlobRef.VarRef _ -> `LOCAL
   | _ -> `GLOBAL
 
 let get_strength stre ref cls clt =
@@ -181,7 +178,7 @@ let build_id_coercion idf_opt source poly =
   let env = Global.env () in
   let sigma = Evd.from_env env in
   let sigma, vs = match source with
-    | CL_CONST sp -> Evd.fresh_global env sigma (ConstRef sp)
+    | CL_CONST sp -> Evd.fresh_global env sigma (GlobRef.ConstRef sp)
     | _ -> error_not_transparent source in
   let vs = EConstr.Unsafe.to_constr vs in
   let c = match constant_opt_value_in env (destConst vs) with
@@ -209,7 +206,7 @@ let build_id_coercion idf_opt source poly =
       user_err  (strbrk
 	"Cannot be defined as coercion (maybe a bad number of arguments).")
   in
-  let idf =
+  let name =
     match idf_opt with
       | Some idf -> idf
       | None ->
@@ -223,9 +220,9 @@ let build_id_coercion idf_opt source poly =
       (definition_entry ~types:typ_f ~univs
 	 ~inline:true (mkCast (val_f, DEFAULTcast, typ_f)))
   in
-  let decl = (constr_entry, IsDefinition IdentityCoercion) in
-  let kn = declare_constant idf decl in
-  ConstRef kn
+  let kind = Decls.(IsDefinition IdentityCoercion) in
+  let kn = declare_constant ~name ~kind constr_entry in
+  GlobRef.ConstRef kn
 
 let check_source = function
 | Some (CL_FUN as s) -> raise (CoercionError (ForbiddenSourceClass s))
@@ -269,7 +266,7 @@ let inCoercion : coercion -> obj =
 let declare_coercion coef ?(local = false) ~isid ~src:cls ~target:clt ~params:ps =
   let isproj =
     match coef with
-    | ConstRef c -> Recordops.find_primitive_projection c
+    | GlobRef.ConstRef c -> Recordops.find_primitive_projection c
     | _ -> None
   in
   let c = {
@@ -339,42 +336,44 @@ let try_add_new_coercion_core ref ~local c d e f =
       user_err ~hdr:"try_add_new_coercion_core"
         (explain_coercion_error ref e ++ str ".")
 
-let try_add_new_coercion ref ~local poly =
+let try_add_new_coercion ref ~local ~poly =
   try_add_new_coercion_core ref ~local poly None None false
 
-let try_add_new_coercion_subclass cl ~local poly =
+let try_add_new_coercion_subclass cl ~local ~poly =
   let coe_ref = build_id_coercion None cl poly in
   try_add_new_coercion_core coe_ref ~local poly (Some cl) None true
 
-let try_add_new_coercion_with_target ref ~local poly ~source ~target =
+let try_add_new_coercion_with_target ref ~local ~poly ~source ~target =
   try_add_new_coercion_core ref ~local poly (Some source) (Some target) false
 
-let try_add_new_identity_coercion id ~local poly ~source ~target =
+let try_add_new_identity_coercion id ~local ~poly ~source ~target =
   let ref = build_id_coercion (Some id) source poly in
   try_add_new_coercion_core ref ~local poly (Some source) (Some target) true
 
-let try_add_new_coercion_with_source ref ~local poly ~source =
+let try_add_new_coercion_with_source ref ~local ~poly ~source =
   try_add_new_coercion_core ref ~local poly (Some source) None false
 
-let add_coercion_hook poly _uctx _trans local ref =
-  let local = match local with
-  | Discharge
-  | Local -> true
-  | Global -> false
+let add_coercion_hook poly { DeclareDef.Hook.S.scope; dref; _ } =
+  let open DeclareDef in
+  let local = match scope with
+  | Discharge -> assert false (* Local Coercion in section behaves like Local Definition *)
+  | Global ImportNeedQualified -> true
+  | Global ImportDefaultBehavior -> false
   in
-  let () = try_add_new_coercion ref ~local poly in
-  let msg = Nametab.pr_global_env Id.Set.empty ref ++ str " is now a coercion" in
+  let () = try_add_new_coercion dref ~local ~poly in
+  let msg = Nametab.pr_global_env Id.Set.empty dref ++ str " is now a coercion" in
   Flags.if_verbose Feedback.msg_info msg
 
-let add_coercion_hook poly = Lemmas.mk_hook (add_coercion_hook poly)
+let add_coercion_hook ~poly = DeclareDef.Hook.make (add_coercion_hook poly)
 
-let add_subclass_hook poly _uctx _trans local ref =
-  let stre = match local with
-  | Local -> true
-  | Global -> false
-  | Discharge -> assert false
+let add_subclass_hook ~poly { DeclareDef.Hook.S.scope; dref; _ } =
+  let open DeclareDef in
+  let stre = match scope with
+  | Discharge -> assert false (* Local Subclass in section behaves like Local Definition *)
+  | Global ImportNeedQualified -> true
+  | Global ImportDefaultBehavior -> false
   in
-  let cl = class_of_global ref in
-  try_add_new_coercion_subclass cl ~local:stre poly
+  let cl = class_of_global dref in
+  try_add_new_coercion_subclass cl ~local:stre ~poly
 
-let add_subclass_hook poly = Lemmas.mk_hook (add_subclass_hook poly)
+let add_subclass_hook ~poly = DeclareDef.Hook.make (add_subclass_hook ~poly)

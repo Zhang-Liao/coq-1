@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -12,40 +12,30 @@ open Util
 
 (* Dump of globalization (to be used by coqdoc) *)
 
-let glob_file = ref Pervasives.stdout
+let glob_file = ref stdout
 
 let open_glob_file f =
-  glob_file := Pervasives.open_out f
+  glob_file := open_out f
 
 let close_glob_file () =
-  Pervasives.close_out !glob_file
+  close_out !glob_file
 
-type glob_output_t =
-    | NoGlob
-    | StdOut
-    | MultFiles
-    | Feedback
-    | File of string
+type glob_output =
+  | NoGlob
+  | Feedback
+  | MultFiles
+  | File of string
 
 let glob_output = ref NoGlob
 
-let dump () = !glob_output != NoGlob
+let dump () = !glob_output <> NoGlob
 
-let noglob () = glob_output := NoGlob
-
-let dump_to_dotglob () = glob_output := MultFiles
-
-let dump_into_file f =
-  if String.equal f "stdout" then
-    (glob_output := StdOut; glob_file := Pervasives.stdout)
-  else
-    (glob_output := File f; open_glob_file f)
-
-let feedback_glob () = glob_output := Feedback
+let set_glob_output mode =
+  glob_output := mode
 
 let dump_string s =
-  if dump () && !glob_output != Feedback then 
-    Pervasives.output_string !glob_file s
+  if dump () && !glob_output != Feedback then
+    output_string !glob_file s
 
 let start_dump_glob ~vfile ~vofile =
   match !glob_output with
@@ -57,19 +47,19 @@ let start_dump_glob ~vfile ~vofile =
   | File f ->
       open_glob_file f;
       output_string !glob_file "DIGEST NO\n"
-  | NoGlob | Feedback | StdOut ->
+  | NoGlob | Feedback ->
       ()
 
 let end_dump_glob () =
   match !glob_output with
   | MultFiles | File _ -> close_glob_file ()
-  | NoGlob | Feedback | StdOut -> ()
+  | NoGlob | Feedback -> ()
 
 let previous_state = ref MultFiles
 let pause () = previous_state := !glob_output; glob_output := NoGlob
 let continue () = glob_output := !previous_state
 
-open Decl_kinds
+open Decls
 open Declarations
 
 let type_of_logical_kind = function
@@ -91,7 +81,8 @@ let type_of_logical_kind = function
       (match a with
       | Definitional -> "defax"
       | Logical -> "prfax"
-      | Conjectural -> "prfax")
+      | Conjectural -> "prfax"
+      | Context -> "prfax")
   | IsProof th ->
       (match th with
       | Theorem
@@ -103,16 +94,24 @@ let type_of_logical_kind = function
       | Corollary -> "thm")
   | IsPrimitive -> "prim"
 
+
+(** Data associated to global parameters and constants *)
+
+let csttab = Summary.ref (Names.Cmap.empty : logical_kind Names.Cmap.t) ~name:"CONSTANT"
+let add_constant_kind kn k = csttab := Names.Cmap.add kn k !csttab
+let constant_kind kn = Names.Cmap.find kn !csttab
+
 let type_of_global_ref gr =
   if Typeclasses.is_class gr then
     "class"
   else
+    let open Names.GlobRef in
     match gr with
-    | Globnames.ConstRef cst ->
-	type_of_logical_kind (Decls.constant_kind cst)
-    | Globnames.VarRef v ->
-	"var" ^ type_of_logical_kind (Decls.variable_kind v)
-    | Globnames.IndRef ind ->
+    | ConstRef cst ->
+      type_of_logical_kind (constant_kind cst)
+    | VarRef v ->
+      "var" ^ type_of_logical_kind (Decls.variable_kind v)
+    | IndRef ind ->
 	let (mib,oib) = Inductive.lookup_mind_specif (Global.env ()) ind in
           if mib.Declarations.mind_record <> Declarations.NotRecord then
             begin match mib.Declarations.mind_finite with
@@ -126,7 +125,7 @@ let type_of_global_ref gr =
             | BiFinite -> "variant"
 	    | CoFinite -> "coind"
             end
-    | Globnames.ConstructRef _ -> "constr"
+    | ConstructRef _ -> "constr"
 
 let remove_sections dir =
   let cwd = Lib.cwd_except_section () in
@@ -157,6 +156,9 @@ let dump_ref ?loc filepath modpath ident ty =
 let dump_reference ?loc modpath ident ty =
   let filepath = Names.DirPath.to_string (Lib.library_dp ()) in
   dump_ref ?loc filepath modpath ident ty
+
+let dump_secvar ?loc id =
+  dump_reference ?loc "<>" (Libnames.string_of_qualid (Decls.variable_secpath id)) "var"
 
 let dump_modref ?loc mp ty =
   let (dp, l) = Lib.split_modpath mp in

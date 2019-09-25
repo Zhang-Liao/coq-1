@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -56,8 +56,6 @@ val string_of_path : full_path -> string
 val pr_path : full_path -> Pp.t
 
 module Spmap  : CSig.MapS with type key = full_path
-
-val restrict_path : int -> full_path -> full_path
 
 (** {6 ... } *)
 (** A [qualid] is a partially qualified ident; it includes fully

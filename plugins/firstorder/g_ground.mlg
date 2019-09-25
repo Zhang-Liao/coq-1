@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -83,7 +83,7 @@ END
 
 VERNAC COMMAND EXTEND Firstorder_Print_Solver CLASSIFIED AS QUERY
 | [ "Print" "Firstorder" "Solver" ] -> {
-    Feedback.msg_info
+    Feedback.msg_notice
       (Pp.(++) (Pp.str"Firstorder solver tactic is ") (print_default_solver ())) }
 END
 

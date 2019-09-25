@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -31,6 +31,10 @@ module type PHashtable =
     val memo : string -> (key -> 'a) -> (key -> 'a)
       (** [memo cache f] returns a memo function for [f] using file [cache] as persistent table.
           Note that the cache will only be loaded when the function is used for the first time *)
+
+    val memo_cond : string -> (key -> bool) -> (key -> 'a) -> (key -> 'a)
+      (** [memo cache cond f] only use the cache if [cond k] holds for the key [k].  *)
+
 
   end
 

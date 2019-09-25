@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -297,7 +297,7 @@ module DAG = DAG(struct type t = string let compare = compare end)
 (** TODO: we should share this code with Coqdep_common *)
 module VData = struct
   type t = string list option * string list
-  let compare = Pervasives.compare
+  let compare = Util.pervasives_compare
 end
 
 module VCache = Set.Make(VData)

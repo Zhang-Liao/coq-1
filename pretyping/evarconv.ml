@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -263,7 +263,7 @@ let check_conv_record env sigma (t1,sk1) (t2,sk2) =
 	lookup_canonical_conversion
 	  (proji, Sort_cs (Sorts.family s)),[]
       | Proj (p, c) ->
-        let c2 = Globnames.ConstRef (Projection.constant p) in
+        let c2 = GlobRef.ConstRef (Projection.constant p) in
         let c = Retyping.expand_projection env sigma p c [] in
         let _, args = destApp sigma c in
         let sk2 = Stack.append_app args sk2 in
@@ -773,7 +773,7 @@ and evar_eqappr_x ?(rhs_is_already_stuck = false) flags env evd pbty
   (* Evar must be undefined since we have flushed evars *)
   let () = if !debug_unification then
 	     let open Pp in
-             Feedback.msg_notice (v 0 (pr_state env evd appr1 ++ cut () ++ pr_state env evd appr2 ++ cut ())) in
+             Feedback.msg_debug (v 0 (pr_state env evd appr1 ++ cut () ++ pr_state env evd appr2 ++ cut ())) in
   match (flex_kind_of_term flags env evd term1 sk1,
          flex_kind_of_term flags env evd term2 sk2) with
     | Flexible (sp1,al1), Flexible (sp2,al2) ->
@@ -1310,27 +1310,27 @@ let set_of_evctx l =
 (** Weaken the existentials so that they can be typed in sign and raise
     an error if the term otherwise mentions variables not bound in sign. *)
 let thin_evars env sigma sign c =
-  let evdref = ref sigma in
+  let sigma = ref sigma in
   let ctx = set_of_evctx sign in
   let rec applyrec (env,acc) t =
-    match kind sigma t with
+    match kind !sigma t with
     | Evar (ev, args) ->
-       let evi = Evd.find_undefined sigma ev in
-       let filter = Array.map (fun c -> Id.Set.subset (collect_vars sigma c) ctx) args in
+       let evi = Evd.find_undefined !sigma ev in
+       let filter = Array.map (fun c -> Id.Set.subset (collect_vars !sigma c) ctx) args in
        let filter = Filter.make (Array.to_list filter) in
        let candidates = Option.map (List.map EConstr.of_constr) (evar_candidates evi) in
-       let evd, ev = restrict_evar !evdref ev filter candidates in
-       evdref := evd; whd_evar !evdref t
+       let evd, ev = restrict_evar !sigma ev filter candidates in
+       sigma := evd; whd_evar !sigma t
     | Var id ->
-       if not (Id.Set.mem id ctx) then raise (TypingFailed sigma)
+       if not (Id.Set.mem id ctx) then raise (TypingFailed !sigma)
        else t
     | _ ->
-       map_constr_with_binders_left_to_right !evdref
+       map_constr_with_binders_left_to_right !sigma
         (fun d (env,acc) -> (push_rel d env, acc+1))
         applyrec (env,acc) t
   in
   let c' = applyrec (env,0) c in
-  (!evdref, c')
+  (!sigma, c')
 
 let second_order_matching flags env_rhs evd (evk,args) (test,argoccs) rhs =
   try
@@ -1569,7 +1569,7 @@ let apply_conversion_problem_heuristic flags env evd with_ho pbty t1 t2 =
   let (term2,l2 as appr2) = try destApp evd t2 with DestKO -> (t2, [||]) in
   let () = if !debug_unification then
 	     let open Pp in
-             Feedback.msg_notice (v 0 (str "Heuristic:" ++ spc () ++
+             Feedback.msg_debug (v 0 (str "Heuristic:" ++ spc () ++
                                 Termops.Internal.print_constr_env env evd t1 ++ cut () ++
                                 Termops.Internal.print_constr_env env evd t2 ++ cut ())) in
   let app_empty = Array.is_empty l1 && Array.is_empty l2 in

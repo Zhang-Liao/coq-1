@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -17,29 +17,28 @@
    arguments and pattern-matching compilation are not. *)
 
 open Names
-open Decl_kinds
 
 type existential_name = Id.t
 
 (** Sorts *)
 
-type 'a glob_sort_gen =
+type glob_sort_name =
   | GSProp (** representation of [SProp] literal *)
-  | GProp (** representation of [Prop] literal *)
-  | GSet  (** representation of [Set] literal *)
-  | GType of 'a (** representation of [Type] literal *)
+  | GProp (** representation of [Prop] level *)
+  | GSet  (** representation of [Set] level *)
+  | GType of Libnames.qualid (** representation of a [Type] level *)
 
-type 'a universe_kind =
-  | UAnonymous
-  | UUnknown
+type 'a glob_sort_expr =
+  | UAnonymous of { rigid : bool } (** not rigid = unifiable by minimization *)
   | UNamed of 'a
 
-type level_info = Libnames.qualid universe_kind
-type glob_level = level_info glob_sort_gen
-type glob_constraint = glob_level * Univ.constraint_type * glob_level
+(** levels, occurring in universe instances *)
+type glob_level = glob_sort_name glob_sort_expr
 
-type sort_info = (Libnames.qualid * int) option list
-type glob_sort = sort_info glob_sort_gen
+(** sort expressions *)
+type glob_sort = (glob_sort_name * int) list glob_sort_expr
+
+type glob_constraint = glob_sort_name * Univ.constraint_type * glob_sort_name
 
 type glob_recarg = int option
 
@@ -65,6 +64,8 @@ type 'a cases_pattern_r =
 and 'a cases_pattern_g = ('a cases_pattern_r, 'a) DAst.t
 
 type cases_pattern = [ `any ] cases_pattern_g
+
+type binding_kind = Explicit | Implicit
 
 (** Representation of an internalized (or in other words globalized) term. *)
 type 'a glob_constr_r =

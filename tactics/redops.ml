@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -10,7 +10,7 @@
 
 open Genredexpr
 
-let union_consts l1 l2 = Util.List.union Pervasives.(=) l1 l2 (* FIXME *)
+let union_consts l1 l2 = Util.List.union (=) l1 l2 (* FIXME *)
 
 let make_red_flag l =
   let rec add_flag red = function

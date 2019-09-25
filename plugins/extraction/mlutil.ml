@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -12,7 +12,6 @@
 open Util
 open Names
 open Libnames
-open Globnames
 open Table
 open Miniml
 (*i*)
@@ -668,11 +667,11 @@ let is_regular_match br =
 	  | _ -> raise Impossible
       in
       let ind = match get_r br.(0) with
-	| ConstructRef (ind,_) -> ind
+        | GlobRef.ConstructRef (ind,_) -> ind
 	| _ -> raise Impossible
       in
       let is_ref i tr = match get_r tr with
-      | ConstructRef (ind', j) -> eq_ind ind ind' && Int.equal j (i + 1)
+      | GlobRef.ConstructRef (ind', j) -> eq_ind ind ind' && Int.equal j (i + 1)
       | _ -> false
       in
       Array.for_all_i is_ref 0 br
@@ -780,7 +779,7 @@ let eta_red e =
 	else e
     | _ -> e
 
-(* Performs an eta-reduction when the core is atomic,
+(* Performs an eta-reduction when the core is atomic and value,
    or otherwise returns None *)
 
 let atomic_eta_red e =
@@ -790,7 +789,7 @@ let atomic_eta_red e =
   | MLapp (f,a) when test_eta_args_lift 0 n a ->
      (match f with
       | MLrel k when k>n -> Some (MLrel (k-n))
-      | MLglob _ | MLexn _ | MLdummy _ -> Some f
+      | MLglob _ | MLdummy _ -> Some f
       | _ -> None)
   | _ -> None
 
@@ -819,11 +818,11 @@ let rec tmp_head_lams = function
 *)
 
 let rec ast_glob_subst s t = match t with
-  | MLapp ((MLglob ((ConstRef kn) as refe)) as f, a) ->
+  | MLapp ((MLglob ((GlobRef.ConstRef kn) as refe)) as f, a) ->
       let a = List.map (fun e -> tmp_head_lams (ast_glob_subst s e)) a in
       (try linear_beta_red a (Refmap'.find refe s)
        with Not_found -> MLapp (f, a))
-  | MLglob ((ConstRef kn) as refe) ->
+  | MLglob ((GlobRef.ConstRef kn) as refe) ->
       (try Refmap'.find refe s with Not_found -> t)
   | _ -> ast_map (ast_glob_subst s) t
 
@@ -1504,7 +1503,7 @@ open Declareops
 let inline_test r t =
   if not (auto_inline ()) then false
   else
-    let c = match r with ConstRef c -> c | _ -> assert false in
+    let c = match r with GlobRef.ConstRef c -> c | _ -> assert false in
     let has_body =
       try constant_has_body (Global.lookup_constant c)
       with Not_found -> false
@@ -1534,7 +1533,7 @@ let manual_inline_set =
     Cset_env.empty
 
 let manual_inline = function
-  | ConstRef c -> Cset_env.mem c manual_inline_set
+  | GlobRef.ConstRef c -> Cset_env.mem c manual_inline_set
   | _ -> false
 
 (* If the user doesn't say he wants to keep [t], we inline in two cases:
@@ -1548,6 +1547,7 @@ let inline r t =
   not (to_keep r) (* The user DOES want to keep it *)
   && not (is_inline_custom r)
   && (to_inline r (* The user DOES want to inline it *)
-     || (lang () != Haskell && not (is_projection r) &&
-         (is_recursor r || manual_inline r || inline_test r t)))
+     || (lang () != Haskell &&
+         (is_projection r || is_recursor r ||
+          manual_inline r || inline_test r t)))
 

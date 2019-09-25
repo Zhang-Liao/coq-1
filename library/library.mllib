@@ -4,13 +4,9 @@ Libobject
 Summary
 Nametab
 Global
-Decl_kinds
 Lib
 Declaremods
-Library
 States
 Kindops
 Goptions
-Decls
-Keys
 Coqlib

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -24,6 +24,7 @@ type goal_reference =
   | GoalId of Id.t
 
 type printable =
+  | PrintTypingFlags
   | PrintTables
   | PrintFullContext
   | PrintSectionContext of qualid
@@ -128,18 +129,26 @@ type definition_expr =
   | DefineBody of local_binder_expr list * Genredexpr.raw_red_expr option * constr_expr
       * constr_expr option
 
-type fixpoint_expr =
-    ident_decl * recursion_order_expr option * local_binder_expr list * constr_expr * constr_expr option
+type decl_notation = lstring * constr_expr * scope_name option
 
-type cofixpoint_expr =
-    ident_decl * local_binder_expr list * constr_expr * constr_expr option
+type 'a fix_expr_gen =
+  { fname : lident
+  ; univs : universe_decl_expr option
+  ; rec_order : 'a
+  ; binders : local_binder_expr list
+  ; rtype : constr_expr
+  ; body_def : constr_expr option
+  ; notations : decl_notation list
+  }
+
+type fixpoint_expr = recursion_order_expr option fix_expr_gen
+type cofixpoint_expr = unit fix_expr_gen
 
 type local_decl_expr =
   | AssumExpr of lname * constr_expr
   | DefExpr of lname * constr_expr * constr_expr option
 
 type inductive_kind = Inductive_kw | CoInductive | Variant | Record | Structure | Class of bool (* true = definitional, false = inductive *)
-type decl_notation = lstring * constr_expr * scope_name option
 type simple_binder = lident list  * constr_expr
 type class_binder = lident * constr_expr list
 type 'a with_coercion = coercion_flag * 'a
@@ -161,7 +170,7 @@ type inductive_expr =
 type one_inductive_expr =
   lident * local_binder_expr list * constr_expr option * constructor_expr list
 
-type typeclass_constraint = name_decl * Decl_kinds.binding_kind * constr_expr
+type typeclass_constraint = name_decl * Glob_term.binding_kind * constr_expr
 and typeclass_context = typeclass_constraint list
 
 type proof_expr =
@@ -256,6 +265,8 @@ type extend_name =
      is given an offset, starting from zero. *)
   int
 
+type discharge = DoDischarge | NoDischarge
+
 type nonrec vernac_expr =
 
   | VernacLoad of verbose_flag * string
@@ -274,15 +285,15 @@ type nonrec vernac_expr =
   | VernacDeclareCustomEntry of string
 
   (* Gallina *)
-  | VernacDefinition of (Decl_kinds.discharge * Decl_kinds.definition_object_kind) * name_decl * definition_expr
-  | VernacStartTheoremProof of Decl_kinds.theorem_kind * proof_expr list
+  | VernacDefinition of (discharge * Decls.definition_object_kind) * name_decl * definition_expr
+  | VernacStartTheoremProof of Decls.theorem_kind * proof_expr list
   | VernacEndProof of proof_end
   | VernacExactProof of constr_expr
-  | VernacAssumption of (Decl_kinds.discharge * Decl_kinds.assumption_object_kind) *
+  | VernacAssumption of (discharge * Decls.assumption_object_kind) *
       Declaremods.inline * (ident_decl list * constr_expr) with_coercion list
-  | VernacInductive of vernac_cumulative option * Decl_kinds.private_flag * inductive_flag * (inductive_expr * decl_notation list) list
-  | VernacFixpoint of Decl_kinds.discharge * (fixpoint_expr * decl_notation list) list
-  | VernacCoFixpoint of Decl_kinds.discharge * (cofixpoint_expr * decl_notation list) list
+  | VernacInductive of vernac_cumulative option * bool (* private *) * inductive_flag * (inductive_expr * decl_notation list) list
+  | VernacFixpoint of discharge * fixpoint_expr list
+  | VernacCoFixpoint of discharge * cofixpoint_expr list
   | VernacScheme of (lident option * scheme) list
   | VernacCombinedScheme of lident * lident list
   | VernacUniverse of lident list
@@ -349,7 +360,6 @@ type nonrec vernac_expr =
   | VernacResetName of lident
   | VernacResetInitial
   | VernacBack of int
-  | VernacBackTo of int
 
   (* Commands *)
   | VernacCreateHintDb of string * bool
@@ -405,12 +415,17 @@ type nonrec vernac_expr =
   (* For extension *)
   | VernacExtend of extend_name * Genarg.raw_generic_argument list
 
-type vernac_control_r =
-  | VernacExpr of Attributes.vernac_flags * vernac_expr
+type control_flag =
+  | ControlTime of bool
   (* boolean is true when the `-time` batch-mode command line flag was set.
      the flag is used to print differently in `-time` vs `Time foo` *)
-  | VernacTime of bool * vernac_control
-  | VernacRedirect of string * vernac_control
-  | VernacTimeout of int * vernac_control
-  | VernacFail of vernac_control
+  | ControlRedirect of string
+  | ControlTimeout of int
+  | ControlFail
+
+type vernac_control_r =
+  { control : control_flag list
+  ; attrs : Attributes.vernac_flags
+  ; expr : vernac_expr
+  }
 and vernac_control = vernac_control_r CAst.t

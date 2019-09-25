@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -89,12 +89,15 @@ let push_context_set b c = globalize0 (Safe_typing.push_context_set b c)
 let set_engagement c = globalize0 (Safe_typing.set_engagement c)
 let set_indices_matter b = globalize0 (Safe_typing.set_indices_matter b)
 let set_typing_flags c = globalize0 (Safe_typing.set_typing_flags c)
+let set_check_guarded c = globalize0 (Safe_typing.set_check_guarded c)
+let set_check_positive c = globalize0 (Safe_typing.set_check_positive c)
+let set_check_universes c = globalize0 (Safe_typing.set_check_universes c)
 let typing_flags () = Environ.typing_flags (env ())
 let make_sprop_cumulative () = globalize0 Safe_typing.make_sprop_cumulative
 let set_allow_sprop b = globalize0 (Safe_typing.set_allow_sprop b)
 let sprop_allowed () = Environ.sprop_allowed (env())
 let export_private_constants ~in_section cd = globalize (Safe_typing.export_private_constants ~in_section cd)
-let add_constant ?role ~in_section id d = globalize (Safe_typing.add_constant ?role ~in_section (i2l id) d)
+let add_constant ~side_effect ~in_section id d = globalize (Safe_typing.add_constant ~side_effect ~in_section (i2l id) d)
 let add_recipe ~in_section id d = globalize (Safe_typing.add_recipe ~in_section (i2l id) d)
 let add_mind id mie = globalize (Safe_typing.add_mind (i2l id) mie)
 let add_modtype id me inl = globalize (Safe_typing.add_modtype (i2l id) me inl)
@@ -116,6 +119,7 @@ let add_module_parameter mbid mte inl =
 (** Queries on the global environment *)
 
 let universes () = universes (env())
+let universes_lbound () = universes_lbound (env())
 let named_context () = named_context (env())
 let named_context_val () = named_context_val (env())
 
@@ -139,9 +143,14 @@ let body_of_constant_body access env cb =
   | Undef _ | Primitive _ ->
      None
   | Def c ->
-     Some (Mod_subst.force_constr c, Declareops.constant_polymorphic_context cb)
+    let u = match cb.const_universes with
+    | Monomorphic _ -> Opaqueproof.PrivateMonomorphic ()
+    | Polymorphic auctx -> Opaqueproof.PrivatePolymorphic (Univ.AUContext.size auctx, Univ.ContextSet.empty)
+    in
+    Some (Mod_subst.force_constr c, u, Declareops.constant_polymorphic_context cb)
   | OpaqueDef o ->
-     Some (Opaqueproof.force_proof access otab o, Declareops.constant_polymorphic_context cb)
+    let c, u = Opaqueproof.force_proof access otab o in
+    Some (c, u, Declareops.constant_polymorphic_context cb)
 
 let body_of_constant_body access ce = body_of_constant_body access (env ()) ce
 
@@ -172,6 +181,10 @@ let env_of_context hyps =
 let is_polymorphic r = Environ.is_polymorphic (env()) r
 
 let is_template_polymorphic r = is_template_polymorphic (env ()) r
+
+let is_template_checked r = is_template_checked (env ()) r
+
+let get_template_polymorphic_variables r = get_template_polymorphic_variables (env ()) r
 
 let is_type_in_type r = is_type_in_type (env ()) r
 

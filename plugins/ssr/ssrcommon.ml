@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -181,8 +181,6 @@ let option_assert_get o msg =
 
 (** Constructors for rawconstr *)
 open Glob_term
-open Globnames
-open Decl_kinds
 
 let mkRHole = DAst.make @@ GHole (Evar_kinds.InternalHole, Namegen.IntroAnonymous, None)
 
@@ -191,14 +189,14 @@ let rec isRHoles cl = match cl with
 | [] -> true
 | c :: l -> match DAst.get c with GHole _ -> isRHoles l | _ -> false
 let mkRApp f args = if args = [] then f else DAst.make @@ GApp (f, args)
-let mkRVar id = DAst.make @@ GRef (VarRef id,None)
+let mkRVar id = DAst.make @@ GRef (GlobRef.VarRef id,None)
 let mkRltacVar id = DAst.make @@ GVar (id)
 let mkRCast rc rt =  DAst.make @@ GCast (rc, CastConv rt)
-let mkRType =  DAst.make @@ GSort (GType [])
-let mkRProp =  DAst.make @@ GSort (GProp)
+let mkRType =  DAst.make @@ GSort (UAnonymous {rigid=true})
+let mkRProp =  DAst.make @@ GSort (UNamed [GProp,0])
 let mkRArrow rt1 rt2 = DAst.make @@ GProd (Anonymous, Explicit, rt1, rt2)
-let mkRConstruct c = DAst.make @@ GRef (ConstructRef c,None)
-let mkRInd mind = DAst.make @@ GRef (IndRef mind,None)
+let mkRConstruct c = DAst.make @@ GRef (GlobRef.ConstructRef c,None)
+let mkRInd mind = DAst.make @@ GRef (GlobRef.IndRef mind,None)
 let mkRLambda n s t = DAst.make @@ GLambda (n, Explicit, s, t)
 
 let rec mkRnat n =
@@ -682,6 +680,10 @@ let pf_type_id gl t = Id.of_string (Namegen.hdchar (pf_env gl) (project gl) t)
 let pfe_type_of gl t =
   let sigma, ty = pf_type_of gl t in
   re_sig (sig_it gl) sigma, ty
+let pfe_new_type gl =
+  let sigma, env, it = project gl, pf_env gl, sig_it gl in
+  let sigma,t  = Evarutil.new_Type sigma in
+  re_sig it sigma, t
 let pfe_type_relevance_of gl t =
   let gl, ty = pfe_type_of gl t in
   gl, ty, pf_apply Retyping.relevance_of_term gl t
@@ -871,8 +873,8 @@ open Constrexpr
 open Util
 
 (** Constructors for constr_expr *)
-let mkCProp loc = CAst.make ?loc @@ CSort GProp
-let mkCType loc = CAst.make ?loc @@ CSort (GType [])
+let mkCProp loc = CAst.make ?loc @@ CSort (UNamed [GProp,0])
+let mkCType loc = CAst.make ?loc @@ CSort (UAnonymous {rigid=true})
 let mkCVar ?loc id = CAst.make ?loc @@ CRef (qualid_of_ident ?loc id, None)
 let rec mkCHoles ?loc n =
   if n <= 0 then [] else (CAst.make ?loc @@ CHole (None, Namegen.IntroAnonymous, None)) :: mkCHoles ?loc (n - 1)
@@ -1119,6 +1121,7 @@ let cleartac clr = check_hyps_uniq [] clr; Tactics.clear (hyps_ids clr)
 (* XXX the k of the redex should percolate out *)
 let pf_interp_gen_aux gl to_ind ((oclr, occ), t) =
   let pat = interp_cpattern gl t None in (* UGLY API *)
+  let gl = pf_merge_uc_of (fst pat) gl in
   let cl, env, sigma = Tacmach.pf_concl gl, pf_env gl, project gl in
   let (c, ucst), cl = 
     try fill_occ_pattern ~raise_NoMatch:true env sigma (EConstr.Unsafe.to_constr cl) pat occ 1
@@ -1253,6 +1256,7 @@ let abs_wgen keep_let f gen (gl,args,c) =
   | _, Some ((x, "@"), Some p) -> 
      let x = hoi_id x in
      let cp = interp_cpattern gl p None in
+     let gl = pf_merge_uc_of (fst cp) gl in
      let (t, ucst), c =
        try fill_occ_pattern ~raise_NoMatch:true env sigma (EConstr.Unsafe.to_constr c) cp None 1
        with NoMatch -> redex_of_pattern env cp, (EConstr.Unsafe.to_constr c) in
@@ -1265,6 +1269,7 @@ let abs_wgen keep_let f gen (gl,args,c) =
   | _, Some ((x, _), Some p) ->
      let x = hoi_id x in
      let cp = interp_cpattern gl p None in
+     let gl = pf_merge_uc_of (fst cp) gl in
      let (t, ucst), c =
        try fill_occ_pattern ~raise_NoMatch:true env sigma (EConstr.Unsafe.to_constr c) cp None 1
        with NoMatch -> redex_of_pattern env cp, (EConstr.Unsafe.to_constr c) in
@@ -1540,9 +1545,9 @@ let get g =
 end
 
 let is_construct_ref sigma c r =
-  EConstr.isConstruct sigma c && GlobRef.equal (ConstructRef (fst(EConstr.destConstruct sigma c))) r
-let is_ind_ref sigma c r = EConstr.isInd sigma c && GlobRef.equal (IndRef (fst(EConstr.destInd sigma c))) r
+  EConstr.isConstruct sigma c && GlobRef.equal (GlobRef.ConstructRef (fst(EConstr.destConstruct sigma c))) r
+let is_ind_ref sigma c r = EConstr.isInd sigma c && GlobRef.equal (GlobRef.IndRef (fst(EConstr.destInd sigma c))) r
 let is_const_ref sigma c r =
-  EConstr.isConst sigma c && GlobRef.equal (ConstRef (fst(EConstr.destConst sigma c))) r
+  EConstr.isConst sigma c && GlobRef.equal (GlobRef.ConstRef (fst(EConstr.destConst sigma c))) r
 
 (* vim: set filetype=ocaml foldmethod=marker: *)

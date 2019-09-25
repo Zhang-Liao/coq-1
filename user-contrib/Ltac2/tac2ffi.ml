@@ -1,14 +1,15 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 open Util
 open Names
-open Globnames
 open Tac2dyn
 open Tac2expr
 open Proofview.Notations
@@ -335,13 +336,13 @@ let of_constant c = of_ext val_constant c
 let to_constant c = to_ext val_constant c
 let constant = repr_ext val_constant
 
-let of_reference = function
+let of_reference = let open GlobRef in function
 | VarRef id -> ValBlk (0, [| of_ident id |])
 | ConstRef cst -> ValBlk (1, [| of_constant cst |])
 | IndRef ind -> ValBlk (2, [| of_ext val_inductive ind |])
 | ConstructRef cstr -> ValBlk (3, [| of_ext val_constructor cstr |])
 
-let to_reference = function
+let to_reference = let open GlobRef in function
 | ValBlk (0, [| id |]) -> VarRef (to_ident id)
 | ValBlk (1, [| cst |]) -> ConstRef (to_constant cst)
 | ValBlk (2, [| ind |]) -> IndRef (to_ext val_inductive ind)

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -21,9 +21,6 @@ val push : exn -> Exninfo.iexn
  [Anomaly] is used for system errors and [UserError] for the
    user's ones. *)
 
-val make_anomaly : ?label:string -> Pp.t -> exn
-(** Create an anomaly. *)
-
 val anomaly : ?loc:Loc.t -> ?label:string -> Pp.t -> 'a
 (** Raise an anomaly, with an optional location and an optional
     label identifying the anomaly. *)
@@ -40,17 +37,6 @@ exception UserError of string option * Pp.t
 val user_err : ?loc:Loc.t -> ?hdr:string -> Pp.t -> 'a
 (** Main error raising primitive. [user_err ?loc ?hdr pp] signals an
     error [pp] with optional header and location [hdr] [loc] *)
-
-exception AlreadyDeclared of Pp.t
-val alreadydeclared : Pp.t -> 'a
-
-val invalid_arg : ?loc:Loc.t -> string -> 'a
-
-(** [todo] is for running of an incomplete code its implementation is
-   "do nothing" (or print a message), but this function should not be
-   used in a released code *)
-
-val todo : string -> unit
 
 exception Timeout
 
@@ -75,7 +61,7 @@ exception Unhandled
 val register_handler : (exn -> Pp.t) -> unit
 
 (** The standard exception printer *)
-val print : ?info:Exninfo.info -> exn -> Pp.t
+val print : exn -> Pp.t
 val iprint : Exninfo.iexn -> Pp.t
 
 (** Same as [print], except that the "Please report" part of an anomaly
@@ -90,6 +76,9 @@ val iprint_no_report : Exninfo.iexn -> Pp.t
 *)
 val noncritical : exn -> bool
 
-(** Check whether an exception is handled by some toplevel printer. The
-    [Anomaly] exception is never handled. *)
-val handled : exn -> bool
+(** Register a printer for errors carrying additional information on
+   exceptions. This method is fragile and should be considered
+   deprecated *)
+val register_additional_error_info
+  :  (Exninfo.info -> (Pp.t option Loc.located) option)
+  -> unit

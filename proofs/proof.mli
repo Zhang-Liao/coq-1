@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -47,8 +47,6 @@ type data =
   (** A representation of the shelf  *)
   ; given_up : Evar.t list
   (** A representation of the given up goals  *)
-  ; initial_euctx : UState.t
-  (** The initial universe context (for the statement) *)
   ; name : Names.Id.t
   (** The name of the theorem whose proof is being constructed *)
   ; poly : bool;
@@ -177,8 +175,6 @@ val run_tactic
 val maximal_unfocus : 'a focus_kind -> t -> t
 
 (*** Commands ***)
-
-val in_proof : t -> (Evd.evar_map -> 'a) -> 'a
 
 (* Remove all the goals from the shelf and adds them at the end of the
    focused goals. *)

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -55,7 +55,8 @@ Extract Constant Rinv   => "fun x -> 1 / x".
     extraction is only performed as a test in the test suite. *)
 (*Extraction "micromega.ml"
            Tauto.mapX Tauto.foldA Tauto.collect_annot Tauto.ids_of_formula Tauto.map_bformula
-           ZMicromega.cnfZ ZMicromega.Zeval_const ZMicromega.bound_problem_fr QMicromega.cnfQ
+           Tauto.abst_form
+           ZMicromega.cnfZ ZMicromega.bound_problem_fr ZMicromega.Zeval_const QMicromega.cnfQ
            List.map simpl_cone (*map_cone  indexes*)
            denorm Qpower vm_add
    normZ normQ normQ n_of_Z N.of_nat ZTautoChecker ZWeakChecker QTautoChecker RTautoChecker find.

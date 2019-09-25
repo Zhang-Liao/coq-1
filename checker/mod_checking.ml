@@ -8,54 +8,64 @@ open Environ
 
 (** {6 Checking constants } *)
 
-let get_proof = ref (fun _ _ -> assert false)
-let set_indirect_accessor f = get_proof := f
-
-let indirect_accessor = {
-  Opaqueproof.access_proof = (fun dp n -> !get_proof dp n);
+let indirect_accessor = ref {
+  Opaqueproof.access_proof = (fun _ _ -> assert false);
+  Opaqueproof.access_discharge = (fun _ _ -> assert false);
 }
+
+let set_indirect_accessor f = indirect_accessor := f
 
 let check_constant_declaration env kn cb =
   Flags.if_verbose Feedback.msg_notice (str "  checking cst:" ++ Constant.print kn);
-  (* Locally set the oracle for further typechecking *)
-  let oracle = env.env_typing_flags.conv_oracle in
-  let env = Environ.set_oracle env cb.const_typing_flags.conv_oracle in
-  (* [env'] contains De Bruijn universe variables *)
-  let poly, env' =
+  let cb_flags = cb.const_typing_flags in
+  let env = Environ.set_typing_flags
+      {env.env_typing_flags with
+       check_guarded = cb_flags.check_guarded;
+       check_universes = cb_flags.check_universes;
+       conv_oracle = cb_flags.conv_oracle;}
+      env
+  in
+  let poly, env =
     match cb.const_universes with
-    | Monomorphic ctx -> false, env
+    | Monomorphic ctx ->
+      (* Monomorphic universes are stored at the library level, the
+         ones in const_universes should not be needed *)
+      false, env
     | Polymorphic auctx ->
       let ctx = Univ.AUContext.repr auctx in
+      (* [env] contains De Bruijn universe variables *)
       let env = push_context ~strict:false ctx env in
       true, env
   in
   let ty = cb.const_type in
-  let _ = infer_type env' ty in
-  let env' = match cb.const_private_poly_univs, (cb.const_body, poly) with
-    | None, _ -> env'
-    | Some local, (OpaqueDef _, true) -> push_subgraph local env'
-    | Some _, _ -> assert false
-  in
+  let _ = infer_type env ty in
   let otab = Environ.opaque_tables env in
-  let body = match cb.const_body with
-  | Undef _ | Primitive _ -> None
-  | Def c -> Some (Mod_subst.force_constr c)
-  | OpaqueDef o -> Some (Opaqueproof.force_proof indirect_accessor otab o)
+  let body, env = match cb.const_body with
+    | Undef _ | Primitive _ -> None, env
+    | Def c -> Some (Mod_subst.force_constr c), env
+    | OpaqueDef o ->
+      let c, u = Opaqueproof.force_proof !indirect_accessor otab o in
+      let env = match u, cb.const_universes with
+        | Opaqueproof.PrivateMonomorphic (), Monomorphic _ -> env
+        | Opaqueproof.PrivatePolymorphic (_, local), Polymorphic _ ->
+          push_subgraph local env
+        | _ -> assert false
+      in
+      Some c, env
   in
   let () =
     match body with
     | Some bd ->
-      let j = infer env' bd in
-      (try conv_leq env' j.uj_type ty
+      let j = infer env bd in
+      (try conv_leq env j.uj_type ty
        with NotConvertible -> Type_errors.error_actual_type env j ty)
     | None -> ()
   in
-  let env =
-    if poly then add_constant kn cb env
-    else add_constant kn cb env'
-  in
-  (* Reset the value of the oracle *)
-  Environ.set_oracle env oracle
+  ()
+
+let check_constant_declaration env kn cb =
+  let () = check_constant_declaration env kn cb in
+  Environ.add_constant kn cb env
 
 (** {6 Checking modules } *)
 

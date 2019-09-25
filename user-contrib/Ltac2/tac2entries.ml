@@ -1,9 +1,11 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 open Pp
@@ -751,7 +753,7 @@ let perform_eval ~pstate e =
       Goal_select.SelectAll, Proof.start ~name ~poly sigma []
     | Some pstate ->
       Goal_select.get_default_goal_selector (),
-      Proof_global.give_me_the_proof pstate
+      Proof_global.get_proof pstate
   in
   let v = match selector with
   | Goal_select.SelectNth i -> Proofview.tclFOCUS i i v
@@ -761,7 +763,7 @@ let perform_eval ~pstate e =
   | Goal_select.SelectAlreadyFocused -> assert false (* TODO **)
   in
   let (proof, _, ans) = Proof.run_tactic (Global.env ()) v proof in
-  let sigma = Proof.in_proof proof (fun sigma -> sigma) in
+  let { Proof.sigma } = Proof.data proof in
   let name = int_name () in
   Feedback.msg_notice (str "- : " ++ pr_glbtype name (snd ty)
     ++ spc () ++  str "=" ++ spc () ++
@@ -809,18 +811,18 @@ let () = register_handler begin function
 | _ -> raise Unhandled
 end
 
-let () = ExplainErr.register_additional_error_info begin fun (e, info) ->
+let () = CErrors.register_additional_error_info begin fun info ->
   if !Tac2interp.print_ltac2_backtrace then
     let bt = Exninfo.get info backtrace in
     let bt = match bt with
     | Some bt -> bt
-    | None -> raise Exit
+    | None -> []
     in
     let bt =
       str "Backtrace:" ++ fnl () ++ prlist_with_sep fnl pr_frame bt ++ fnl ()
     in
     Some (Loc.tag @@ Some bt)
-  else raise Exit
+  else None
 end
 
 (** Printing *)
@@ -856,7 +858,7 @@ let print_ltac qid =
 (** Calling tactics *)
 
 let solve ~pstate default tac =
-  let pstate, status = Proof_global.with_proof begin fun etac p ->
+  let pstate, status = Proof_global.map_fold_proof_endline begin fun etac p ->
     let with_end_tac = if default then Some etac else None in
     let g = Goal_select.get_default_goal_selector () in
     let (p, status) = Pfedit.solve g None tac ?with_end_tac p in

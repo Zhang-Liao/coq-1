@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -149,6 +149,7 @@ apply AC_IF.
 Qed.
 
 
-Notation classical_proof_irrelevence := classical_proof_irrelevance (compat "8.8").
+#[deprecated(since = "8.8", note = "Use classical_proof_irrelevance instead.")]
+Notation classical_proof_irrelevence := classical_proof_irrelevance.
 
 End Berardis_paradox.

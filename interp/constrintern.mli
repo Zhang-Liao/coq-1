@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -61,10 +61,10 @@ type internalization_env = var_internalization_data Id.Map.t
 val empty_internalization_env : internalization_env
 
 val compute_internalization_data : env -> evar_map -> var_internalization_type ->
-  types -> Impargs.manual_explicitation list -> var_internalization_data
+  types -> Impargs.manual_implicits -> var_internalization_data
 
 val compute_internalization_env : env -> evar_map -> ?impls:internalization_env -> var_internalization_type ->
-  Id.t list -> types list -> Impargs.manual_explicitation list list ->
+  Id.t list -> types list -> Impargs.manual_implicits list ->
   internalization_env
 
 type ltac_sign = {
@@ -90,7 +90,7 @@ val intern_gen : typing_constraint -> env -> evar_map ->
 val intern_pattern : env -> cases_pattern_expr ->
   lident list * (Id.t Id.Map.t * cases_pattern) list
 
-val intern_context : bool -> env -> internalization_env -> local_binder_expr list -> internalization_env * glob_decl list
+val intern_context : env -> internalization_env -> local_binder_expr list -> internalization_env * glob_decl list
 
 (** {6 Composing internalization with type inference (pretyping) } *)
 
@@ -158,7 +158,7 @@ val interp_binder_evars : env -> evar_map -> Name.t -> constr_expr -> evar_map *
 (** Interpret contexts: returns extended env and context *)
 
 val interp_context_evars :
-  ?program_mode:bool -> ?global_level:bool -> ?impl_env:internalization_env -> ?shift:int ->
+  ?program_mode:bool -> ?impl_env:internalization_env -> ?shift:int ->
   env -> evar_map -> local_binder_expr list ->
   evar_map * (internalization_env * ((env * rel_context) * Impargs.manual_implicits))
 
@@ -189,3 +189,7 @@ val for_grammar : ('a -> 'b) -> 'a -> 'b
 
 (** Placeholder for global option, should be moved to a parameter *)
 val get_asymmetric_patterns : unit -> bool
+
+val check_duplicate : ?loc:Loc.t -> (qualid * constr_expr) list -> unit
+(** Check that a list of record field definitions doesn't contain
+    duplicates. *)

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -118,8 +118,6 @@ type t =
   (** List of goals that have been shelved. *)
   ; given_up : Goal.goal list
   (** List of goals that have been given up *)
-  ; initial_euctx : UState.t
-  (** The initial universe context (for the statement) *)
   ; name : Names.Id.t
   (** the name of the theorem whose proof is being constructed *)
   ; poly : bool
@@ -290,14 +288,12 @@ let unfocused = is_last_focus end_of_stack_kind
 
 let start ~name ~poly sigma goals =
   let entry, proofview = Proofview.init sigma goals in
-  let pr = {
-    proofview;
-    entry;
-    focus_stack = [] ;
-    shelf = [] ;
-    given_up = [];
-    initial_euctx =
-      Evd.evar_universe_context (snd (Proofview.proofview proofview))
+  let pr =
+    { proofview
+    ; entry
+    ; focus_stack = []
+    ; shelf = []
+    ; given_up = []
     ; name
     ; poly
   } in
@@ -305,14 +301,12 @@ let start ~name ~poly sigma goals =
 
 let dependent_start ~name ~poly goals =
   let entry, proofview = Proofview.dependent_init goals in
-  let pr = {
-    proofview;
-    entry;
-    focus_stack = [] ;
-    shelf = [] ;
-    given_up = [];
-    initial_euctx =
-      Evd.evar_universe_context (snd (Proofview.proofview proofview))
+  let pr =
+    { proofview
+    ; entry
+    ; focus_stack = []
+    ; shelf = []
+    ; given_up = []
     ; name
     ; poly
   } in
@@ -404,8 +398,6 @@ let run_tactic env tac pr =
 
 (*** Commands ***)
 
-let in_proof p k = k (Proofview.return p.proofview)
-
 (* Remove all the goals from the shelf and adds them at the end of the
    focused goals. *)
 let unshelve p =
@@ -488,15 +480,13 @@ type data =
   (** A representation of the shelf  *)
   ; given_up : Evar.t list
   (** A representation of the given up goals  *)
-  ; initial_euctx : UState.t
-  (** The initial universe context (for the statement) *)
   ; name : Names.Id.t
   (** The name of the theorem whose proof is being constructed *)
   ; poly : bool
   (** Locality, polymorphism, and "kind" [Coercion, Definition, etc...] *)
   }
 
-let data { proofview; focus_stack; entry; shelf; given_up; initial_euctx; name; poly } =
+let data { proofview; focus_stack; entry; shelf; given_up; name; poly } =
   let goals, sigma = Proofview.proofview proofview in
   (* spiwack: beware, the bottom of the stack is used by [Proof]
      internally, and should not be exposed. *)
@@ -507,7 +497,7 @@ let data { proofview; focus_stack; entry; shelf; given_up; initial_euctx; name; 
   in
   let stack =
     map_minus_one (fun (_,_,c) -> Proofview.focus_context c) focus_stack in
-  { sigma; goals; entry; stack; shelf; given_up; initial_euctx; name; poly }
+  { sigma; goals; entry; stack; shelf; given_up; name; poly }
 
 let pr_proof p =
   let { goals=fg_goals; stack=bg_goals; shelf; given_up; _ } = data p in

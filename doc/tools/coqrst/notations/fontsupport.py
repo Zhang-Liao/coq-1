@@ -1,8 +1,7 @@
 #!/usr/bin/env python2
-# -*- coding: utf-8 -*-
 ##########################################################################
 ##         #   The Coq Proof Assistant / The Coq Development Team       ##
-##  v      #   INRIA, CNRS and contributors - Copyright 1999-2018       ##
+##  v      #   INRIA, CNRS and contributors - Copyright 1999-2019       ##
 ## <O___,, #       (see CREDITS file for the list of authors)           ##
 ##   \VV/  ###############################################################
 ##    //   #    This file is distributed under the terms of the         ##
@@ -12,6 +11,9 @@
 """Transform a font to center each of its characters in square bounding boxes.
 
 See https://stackoverflow.com/questions/37377476/ for background information.
+
+This script is here for reference. It was used to generate the modified
+font CoqNotations.ttf from UbuntuMono-B.ttf.
 """
 
 from collections import Counter

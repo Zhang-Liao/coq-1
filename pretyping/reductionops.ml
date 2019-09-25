@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -130,7 +130,7 @@ module ReductionBehaviour = struct
     | _ -> None
 
   let rebuild = function
-    | req, (ConstRef c, _ as x) -> req, x
+    | req, (GlobRef.ConstRef c, _ as x) -> req, x
     | _ -> assert false
 
   let inRedBehaviour = declare_object {
@@ -918,7 +918,7 @@ let rec whd_state_gen ?csts ~refold ~tactic_mode flags env sigma =
     let () = if !debug_RAKAM then
 	let open Pp in
         let pr c = Termops.Internal.print_constr_env env sigma c in
-	Feedback.msg_notice
+        Feedback.msg_debug
              (h 0 (str "<<" ++ pr x ++
                    str "|" ++ cut () ++ Cst_stack.pr env sigma cst_l ++
 		   str "|" ++ cut () ++ Stack.pr pr stack ++
@@ -927,7 +927,7 @@ let rec whd_state_gen ?csts ~refold ~tactic_mode flags env sigma =
     let c0 = EConstr.kind sigma x in
     let fold () =
       let () = if !debug_RAKAM then
-	  let open Pp in Feedback.msg_notice (str "<><><><><>") in
+          let open Pp in Feedback.msg_debug (str "<><><><><>") in
       ((EConstr.of_kind c0, stack),cst_l)
     in
     match c0 with
@@ -958,7 +958,7 @@ let rec whd_state_gen ?csts ~refold ~tactic_mode flags env sigma =
           then whrec (if refold then Cst_stack.add_cst (mkConstU const) cst_l else cst_l)
               (body, stack)
           else (* Looks for ReductionBehaviour *)
-            match ReductionBehaviour.get (Globnames.ConstRef c) with
+            match ReductionBehaviour.get (GlobRef.ConstRef c) with
             | None -> whrec (Cst_stack.add_cst (mkConstU const) cst_l) (body, stack)
             | Some behavior ->
               begin match behavior with
@@ -1009,7 +1009,7 @@ let rec whd_state_gen ?csts ~refold ~tactic_mode flags env sigma =
        if not tactic_mode then
          let stack' = (c, Stack.Proj (p, Cst_stack.empty (*cst_l*)) :: stack) in
          whrec Cst_stack.empty stack'
-       else match ReductionBehaviour.get (Globnames.ConstRef (Projection.constant p)) with
+       else match ReductionBehaviour.get (GlobRef.ConstRef (Projection.constant p)) with
          | None ->
            let stack' = (c, Stack.Proj (p, cst_l) :: stack) in
            let stack'', csts = whrec Cst_stack.empty stack' in

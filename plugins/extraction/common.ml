@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,6 @@ open ModPath
 open Namegen
 open Nameops
 open Libnames
-open Globnames
 open Table
 open Miniml
 open Mlutil
@@ -125,7 +124,7 @@ module KOrd =
 struct
   type t = kind * string
   let compare (k1, s1) (k2, s2) =
-    let c = Pervasives.compare k1 k2 (* OK *) in
+    let c = pervasives_compare k1 k2 (* OK *) in
     if c = 0 then String.compare s1 s2
     else c
 end
@@ -629,21 +628,21 @@ let check_extract_ascii () =
       | Haskell -> "Prelude.Char"
       | _ -> raise Not_found
     in
-    String.equal (find_custom (IndRef (ind_ascii, 0))) (char_type)
+    String.equal (find_custom (GlobRef.IndRef (ind_ascii, 0))) (char_type)
   with Not_found -> false
 
 let is_list_cons l =
- List.for_all (function MLcons (_,ConstructRef(_,_),[]) -> true | _ -> false) l
+ List.for_all (function MLcons (_,GlobRef.ConstructRef(_,_),[]) -> true | _ -> false) l
 
 let is_native_char = function
-  | MLcons(_,ConstructRef ((kn,0),1),l) ->
+  | MLcons(_,GlobRef.ConstructRef ((kn,0),1),l) ->
     MutInd.equal kn ind_ascii && check_extract_ascii () && is_list_cons l
   | _ -> false
 
 let get_native_char c =
   let rec cumul = function
     | [] -> 0
-    | MLcons(_,ConstructRef(_,j),[])::l -> (2-j) + 2 * (cumul l)
+    | MLcons(_,GlobRef.ConstructRef(_,j),[])::l -> (2-j) + 2 * (cumul l)
     | _ -> assert false
   in
   let l = match c with MLcons(_,_,l) -> l | _ -> assert false in

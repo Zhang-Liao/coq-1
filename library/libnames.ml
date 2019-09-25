@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -127,11 +127,6 @@ let path_of_string s =
     | Invalid_argument _ -> invalid_arg "path_of_string"
 
 let pr_path sp = str (string_of_path sp)
-
-let restrict_path n sp =
-  let dir, s = repr_path sp in
-  let dir' = List.firstn n (DirPath.repr dir) in
-  make_path (DirPath.make dir') s
 
 (*s qualified names *)
 type qualid_r = full_path

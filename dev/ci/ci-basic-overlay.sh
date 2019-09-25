@@ -56,14 +56,14 @@
 
 # NB: stdpp and Iris refs are gotten from the opam files in the Iris
 # and lambdaRust repos respectively.
-: "${stdpp_CI_GITURL:=https://gitlab.mpi-sws.org/robbertkrebbers/coq-stdpp}"
+: "${stdpp_CI_GITURL:=https://gitlab.mpi-sws.org/iris/stdpp}"
 : "${stdpp_CI_ARCHIVEURL:=${stdpp_CI_GITURL}/-/archive}"
 
-: "${Iris_CI_GITURL:=https://gitlab.mpi-sws.org/FP/iris-coq}"
+: "${Iris_CI_GITURL:=https://gitlab.mpi-sws.org/iris/iris}"
 : "${Iris_CI_ARCHIVEURL:=${Iris_CI_GITURL}/-/archive}"
 
 : "${lambdaRust_CI_REF:=master}"
-: "${lambdaRust_CI_GITURL:=https://gitlab.mpi-sws.org/FP/LambdaRust-coq}"
+: "${lambdaRust_CI_GITURL:=https://gitlab.mpi-sws.org/iris/lambda-rust}"
 : "${lambdaRust_CI_ARCHIVEURL:=${lambdaRust_CI_GITURL}/-/archive}"
 
 ########################################################################
@@ -100,6 +100,27 @@
 : "${coquelicot_CI_REF:=master}"
 : "${coquelicot_CI_GITURL:=https://gitlab.inria.fr/coquelicot/coquelicot}"
 : "${coquelicot_CI_ARCHIVEURL:=${coquelicot_CI_GITURL}/-/archive}"
+
+########################################################################
+# Coq-interval
+########################################################################
+: "${interval_CI_REF:=master}"
+: "${interval_CI_GITURL:=https://gitlab.inria.fr/coqinterval/interval}"
+: "${interval_CI_ARCHIVEURL:=${interval_CI_GITURL}/-/archive}"
+
+########################################################################
+# Gappa stand alone tool
+########################################################################
+: "${gappa_tool_CI_REF:=master}"
+: "${gappa_tool_CI_GITURL:=https://gitlab.inria.fr/gappa/gappa}"
+: "${gappa_tool_CI_ARCHIVEURL:=${gappa_tool_CI_GITURL}/-/archive}"
+
+########################################################################
+# Gappa plugin
+########################################################################
+: "${gappa_plugin_CI_REF:=master}"
+: "${gappa_plugin_CI_GITURL:=https://gitlab.inria.fr/gappa/coq}"
+: "${gappa_plugin_CI_ARCHIVEURL:=${gappa_plugin_CI_GITURL}/-/archive}"
 
 ########################################################################
 # CompCert
@@ -160,9 +181,9 @@
 ########################################################################
 # SF
 ########################################################################
-: "${sf_lf_CI_TARURL:=https://www.cis.upenn.edu/~bcpierce/sf/lf-current/lf.tgz}"
-: "${sf_plf_CI_TARURL:=https://www.cis.upenn.edu/~bcpierce/sf/plf-current/plf.tgz}"
-: "${sf_vfa_CI_TARURL:=https://www.cis.upenn.edu/~bcpierce/sf/vfa-current/vfa.tgz}"
+: "${sf_lf_CI_TARURL:=https://softwarefoundations.cis.upenn.edu/lf-current/lf.tgz}"
+: "${sf_plf_CI_TARURL:=https://softwarefoundations.cis.upenn.edu/plf-current/plf.tgz}"
+: "${sf_vfa_CI_TARURL:=https://softwarefoundations.cis.upenn.edu/vfa-current/vfa.tgz}"
 
 ########################################################################
 # TLC
@@ -215,7 +236,7 @@
 ########################################################################
 # simple-io
 ########################################################################
-: "${simple_io_CI_REF:=dev}"
+: "${simple_io_CI_REF:=master}"
 : "${simple_io_CI_GITURL:=https://github.com/Lysxia/coq-simple-io}"
 : "${simple_io_CI_ARCHIVEURL:=${simple_io_CI_GITURL}/archive}"
 

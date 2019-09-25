@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -275,9 +275,9 @@ let make_table_widget ?sort cd cb =
   let make_sorting i (_, c) =
     let sort (store : GTree.model) it1 it2 = match c with
     | `IntC c ->
-      Pervasives.compare (store#get ~row:it1 ~column:c) (store#get ~row:it2 ~column:c)
+      compare (store#get ~row:it1 ~column:c) (store#get ~row:it2 ~column:c)
     | `StringC c ->
-      Pervasives.compare (store#get ~row:it1 ~column:c) (store#get ~row:it2 ~column:c)
+      compare (store#get ~row:it1 ~column:c) (store#get ~row:it2 ~column:c)
     in
     store#set_sort_func i sort
   in
@@ -447,7 +447,7 @@ let build_layout (sn:session) =
   let script_scroll = GBin.scrolled_window
     ~vpolicy:`AUTOMATIC ~hpolicy:`AUTOMATIC ~packing:script_frame#add () in
   let state_paned = GPack.paned `VERTICAL
-    ~packing:(eval_paned#pack2 ~shrink:false) () in
+    ~packing:(eval_paned#pack2 ~shrink:true) () in
 
   (* Proof buffer. *)
 
@@ -455,19 +455,21 @@ let build_layout (sn:session) =
   let proof_detachable = Wg_Detachable.detachable ~title () in
   let () = proof_detachable#button#misc#hide () in
   let () = proof_detachable#frame#set_shadow_type `IN in
-  let () = state_paned#add1 proof_detachable#coerce in
-  let callback _ = proof_detachable#show in
-  let () = proof_detachable#connect#attached ~callback in
-  let callback _ =
-    sn.proof#coerce#misc#set_size_request ~width:500 ~height:400 ()
-  in
-  let () = proof_detachable#connect#detached ~callback in
+  let () = state_paned#pack1 ~shrink:true proof_detachable#coerce in
   let proof_scroll = GBin.scrolled_window
     ~vpolicy:`AUTOMATIC ~hpolicy:`AUTOMATIC ~packing:proof_detachable#pack () in
+  let callback _ = proof_detachable#show;
+                   proof_scroll#coerce#misc#set_size_request ~width:0 ~height:0 ()
+  in
+  let () = proof_detachable#connect#attached ~callback in
+  let callback _ =
+    proof_scroll#coerce#misc#set_size_request ~width:500 ~height:400 ()
+  in
+  let () = proof_detachable#connect#detached ~callback in
 
   (* Message buffer. *)
 
-  let message_frame = GPack.notebook ~packing:state_paned#add () in
+  let message_frame = GPack.notebook ~packing:(state_paned#pack2 ~shrink:true) () in
   let add_msg_page pos name text (w : GObj.widget) =
     let detachable =
       Wg_Detachable.detachable ~title:(text^" ("^name^")") () in
@@ -500,23 +502,25 @@ let build_layout (sn:session) =
       ~callback:(fun () -> if sn.buffer#modified
         then img#set_stock `SAVE
         else img#set_stock `YES) in
-  let _ =
-    eval_paned#misc#connect#size_allocate
-      ~callback:
-      (let old_paned_width = ref 2 in
-       let old_paned_height = ref 2 in
-       fun {Gtk.width=paned_width;Gtk.height=paned_height} ->
-         if !old_paned_width <> paned_width ||
-            !old_paned_height <> paned_height
-         then begin
-           eval_paned#set_position
-             (eval_paned#position * paned_width / !old_paned_width);
-           state_paned#set_position
-             (state_paned#position * paned_height / !old_paned_height);
-           old_paned_width := paned_width;
-           old_paned_height := paned_height;
-	 end)
-  in
+  (* There was an issue in the previous implementation for setting the
+     position of the handle. It was using the size_allocate event but
+     there is an issue with size_allocate. G. Melquiond analyzed that
+     at starting time, the size_allocate event is only issued in
+     Layout phase of the gtk loop so that it is actually processed
+     only in the next iteration of the event-update-layout-paint loop,
+     after the user does something and trigger an effective new event
+     (see #10578). So we preventively enforce an estimated position
+     for the handles to be used in the very first initializing
+     iteration of the loop *)
+  let () =
+    (* 14 is the estimated size for vertical borders *)
+    let estimated_vertical_handle_position = (window_width#get - 14) / 2 in
+    (* 169 is the estimated size for menus, command line, horizontal border *)
+    let estimated_horizontal_handle_position = (window_height#get - 169) / 2 in
+    if estimated_vertical_handle_position > 0 then
+      eval_paned#set_position estimated_vertical_handle_position;
+    if estimated_horizontal_handle_position > 0 then
+      state_paned#set_position estimated_horizontal_handle_position in
   session_box#pack sn.finder#coerce;
   session_box#pack sn.segment#coerce;
   sn.command#pack_in (session_paned#pack2 ~shrink:false ~resize:false);
@@ -540,8 +544,6 @@ let build_layout (sn:session) =
     else (label#set_text (red txt);label#set_use_markup true));
   session_tab#pack sn.tab_label#coerce;
   img#set_stock `YES;
-  eval_paned#set_position 1;
-  state_paned#set_position 1;
   let control =
     object
       method detach () = proof_detachable#detach ()

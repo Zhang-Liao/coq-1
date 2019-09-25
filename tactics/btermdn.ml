@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -13,7 +13,6 @@ open Constr
 open EConstr
 open Names
 open Pattern
-open Globnames
 
 (* Discrimination nets with bounded depth.
    See the module dn.ml for further explanations.
@@ -29,14 +28,14 @@ type term_label =
 
 let compare_term_label t1 t2 = match t1, t2 with
 | GRLabel gr1, GRLabel gr2 -> GlobRef.Ordered.compare gr1 gr2
-| _ -> Pervasives.compare t1 t2 (** OK *)
+| _ -> pervasives_compare t1 t2 (** OK *)
 
 type 'res lookup_res = 'res Dn.lookup_res = Label of 'res | Nothing | Everything
 
 let decomp_pat =
   let rec decrec acc = function
     | PApp (f,args) -> decrec (Array.to_list args @ acc) f
-    | PProj (p, c) -> (PRef (ConstRef (Projection.constant p)), c :: acc)
+    | PProj (p, c) -> (PRef (GlobRef.ConstRef (Projection.constant p)), c :: acc)
     | c -> (c,acc)
   in
   decrec []
@@ -51,6 +50,7 @@ let decomp sigma t =
     decrec [] t
 
 let constr_val_discr sigma t =
+  let open GlobRef in
   let c, l = decomp sigma t in
     match EConstr.kind sigma c with
     | Ind (ind_sp,u) -> Label(GRLabel (IndRef ind_sp),l)
@@ -63,6 +63,7 @@ let constr_pat_discr t =
   if not (Patternops.occur_meta_pattern t) then
     None
   else
+    let open GlobRef in
     match decomp_pat t with
     | PRef ((IndRef _) as ref), args
     | PRef ((ConstructRef _ ) as ref), args -> Some (GRLabel ref,args)
@@ -71,6 +72,7 @@ let constr_pat_discr t =
 
 let constr_val_discr_st sigma ts t =
   let c, l = decomp sigma t in
+  let open GlobRef in
     match EConstr.kind sigma c with
     | Const (c,u) -> if TransparentState.is_transparent_constant ts c then Everything else Label(GRLabel (ConstRef c),l)
     | Ind (ind_sp,u) -> Label(GRLabel (IndRef ind_sp),l)
@@ -86,6 +88,7 @@ let constr_val_discr_st sigma ts t =
     | _ -> Nothing
 
 let constr_pat_discr_st ts t =
+  let open GlobRef in
   match decomp_pat t with
   | PRef ((IndRef _) as ref), args
   | PRef ((ConstructRef _ ) as ref), args -> Some (GRLabel ref,args)

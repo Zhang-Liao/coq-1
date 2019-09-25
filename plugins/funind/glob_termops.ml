@@ -1,10 +1,18 @@
-open Pp
+(************************************************************************)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
 open Constr
 open Glob_term
 open CErrors
 open Util
 open Names
-open Decl_kinds
 
 (*
    Some basic functions to rebuild glob_constr
@@ -375,7 +383,7 @@ let rec pattern_to_term pt = DAst.with_val (function
       let patl_as_term =
 	List.map pattern_to_term patternl
       in
-      mkGApp(mkGRef(Globnames.ConstructRef constr),
+      mkGApp(mkGRef(GlobRef.ConstructRef constr),
 	     implicit_args@patl_as_term
 	    )
   ) pt
@@ -434,7 +442,8 @@ let replace_var_by_term x_id term =
 	      replace_var_by_pattern lhs,
 	      replace_var_by_pattern rhs
 	     )
-      | GRec _ -> raise (UserError(None,str "Not handled GRec"))
+      | GRec _ ->
+        CErrors.user_err (Pp.str "Not handled GRec")
       | GSort _
       | GHole _ as rt -> rt
       | GInt _ as rt -> rt

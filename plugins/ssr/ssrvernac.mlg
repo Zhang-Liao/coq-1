@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -27,7 +27,6 @@ open Notation_ops
 open Notation_term
 open Glob_term
 open Stdarg
-open Decl_kinds
 open Pp
 open Ppconstr
 open Printer
@@ -280,7 +279,7 @@ let interp_search_notation ?loc tag okey =
       Feedback.msg_warning (hov 4 (qtag "In" ++ str "also occurs in " ++ pr_ntns'))
     end; ntn
   | [ntn] ->
-    Feedback.msg_info (hov 4 (qtag "In" ++ str "is part of notation " ++ pr_ntn ntn)); ntn
+    Feedback.msg_notice (hov 4 (qtag "In" ++ str "is part of notation " ++ pr_ntn ntn)); ntn
   | ntns' ->
     let e = str "occurs in" ++ spc() ++ pr_and_list pr_ntn ntns' in
     err (hov 4 (str "ambiguous: " ++ qtag "in" ++ e)) in
@@ -298,7 +297,7 @@ let interp_search_notation ?loc tag okey =
     let rbody = glob_constr_of_notation_constr ?loc body in
     let m_body = hov 0 (Constrextern.without_symbols prl_glob_constr rbody) in
     let m = m_sc ++ pr_ntn ntn_pat ++ spc () ++ str "denotes " ++ m_body in
-    Feedback.msg_info (hov 0 m) in
+    Feedback.msg_notice (hov 0 m) in
   if List.length !scs > 1 then
     let scs' = List.remove (=) sc !scs in
     let w = pr_ntn ntn ++ str " is also defined " ++ pr_scs scs' in
@@ -412,11 +411,10 @@ let interp_search_arg arg =
       if is_ident_part s then Search.GlobSearchString s else
       interp_search_notation ~loc s key
   | RGlobSearchSubPattern p ->
-      try
-        let env = Global.env () in
-        let _, p = Constrintern.intern_constr_pattern env (Evd.from_env env) p in
-        Search.GlobSearchSubPattern p
-      with e -> let e = CErrors.push e in iraise (ExplainErr.process_vernac_interp_error e)) arg in
+    let env = Global.env () in
+    let _, p = Constrintern.intern_constr_pattern env (Evd.from_env env) p in
+    Search.GlobSearchSubPattern p) arg
+  in
   let hpat, a1 = match arg with
   | (_, Search.GlobSearchSubPattern (Pattern.PMeta _)) :: a' -> all_true, a'
   | (true, Search.GlobSearchSubPattern p) :: a' ->
@@ -466,7 +464,7 @@ let interp_modloc mr =
 
 let ssrdisplaysearch gr env t =
   let pr_res = pr_global gr ++ str ":" ++ spc () ++ pr_lconstr_env env Evd.empty t in
-  Feedback.msg_info (hov 2 pr_res ++ fnl ())
+  Feedback.msg_notice (hov 2 pr_res ++ fnl ())
 
 }
 
@@ -561,7 +559,7 @@ END
 let print_view_hints env sigma kind l =
   let pp_viewname = str "Hint View" ++ pr_viewpos (Some kind) ++ str " " in
   let pp_hints = pr_list spc (pr_rawhintref env sigma) l in
-  Feedback.msg_info  (pp_viewname ++ hov 0 pp_hints ++ Pp.cut ())
+  Feedback.msg_notice  (pp_viewname ++ hov 0 pp_hints ++ Pp.cut ())
 
 }
 

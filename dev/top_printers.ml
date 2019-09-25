@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,6 @@ open Util
 open Pp
 open Names
 open Libnames
-open Globnames
 open Univ
 open Environ
 open Printer
@@ -141,7 +140,7 @@ let ppclosedglobconstridmap x = pp (pr_closed_glob_constr_idmap x)
 
 let pP s = pp (hov 0 s)
 
-let safe_pr_global = function
+let safe_pr_global = let open GlobRef in function
   | ConstRef kn -> pp (str "CONSTREF(" ++ Constant.debug_print kn ++ str ")")
   | IndRef (kn,i) -> pp (str "INDREF(" ++ MutInd.debug_print kn ++ str "," ++
 			  int i ++ str ")")
@@ -533,7 +532,7 @@ let _ =
   let ty_constr = Extend.TUentry (get_arg_tag Stdarg.wit_constr) in
   let cmd_sig = TyTerminal("PrintConstr", TyNonTerminal(ty_constr, TyNil)) in
   let cmd_fn c ~atts = VtDefault (fun () -> in_current_context econstr_display c) in
-  let cmd_class _ = VtQuery,VtNow in
+  let cmd_class _ = VtQuery in
   let cmd : ty_ml = TyML (false, cmd_sig, cmd_fn, Some cmd_class) in
   vernac_extend ~command:"PrintConstr" [cmd]
 
@@ -542,7 +541,7 @@ let _ =
   let ty_constr = Extend.TUentry (get_arg_tag Stdarg.wit_constr) in
   let cmd_sig = TyTerminal("PrintPureConstr", TyNonTerminal(ty_constr, TyNil)) in
   let cmd_fn c ~atts = VtDefault (fun () -> in_current_context print_pure_econstr c) in
-  let cmd_class _ = VtQuery,VtNow in
+  let cmd_class _ = VtQuery in
   let cmd : ty_ml = TyML (false, cmd_sig, cmd_fn, Some cmd_class) in
   vernac_extend ~command:"PrintPureConstr" [cmd]
 
@@ -558,7 +557,7 @@ let encode_path ?loc prefix mpdir suffix id =
   make_qualid ?loc
     (DirPath.make (List.rev (Id.of_string prefix::dir@suffix))) id
 
-let raw_string_of_ref ?loc _ = function
+let raw_string_of_ref ?loc _ = let open GlobRef in function
   | ConstRef cst ->
       let (mp,id) = Constant.repr2 cst in
       encode_path ?loc "CST" (Some mp) [] (Label.to_id id)
@@ -574,7 +573,7 @@ let raw_string_of_ref ?loc _ = function
   | VarRef id ->
       encode_path ?loc "SECVAR" None [] id
 
-let short_string_of_ref ?loc _ = function
+let short_string_of_ref ?loc _ = let open GlobRef in function
   | VarRef id -> qualid_of_ident ?loc id
   | ConstRef cst -> qualid_of_ident ?loc (Label.to_id (Constant.label cst))
   | IndRef (kn,0) -> qualid_of_ident ?loc (Label.to_id (MutInd.label kn))

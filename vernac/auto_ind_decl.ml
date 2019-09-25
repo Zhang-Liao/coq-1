@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -21,7 +21,6 @@ open Vars
 open Termops
 open Declarations
 open Names
-open Globnames
 open Inductiveops
 open Tactics
 open Ind_tables
@@ -195,19 +194,19 @@ let build_beq_scheme mode kn =
         let (c,a) = Reductionops.whd_betaiota_stack Evd.empty EConstr.(of_constr c) in
         let (c,a) = EConstr.Unsafe.(to_constr c, List.map to_constr a) in
         match Constr.kind c with
-        | Rel x -> mkRel (x-nlist+ndx), Safe_typing.empty_private_constants
+        | Rel x -> mkRel (x-nlist+ndx), Evd.empty_side_effects
         | Var x ->
           (* Support for working in a context with "eq_x : x -> x -> bool" *)
           let eid = Id.of_string ("eq_"^(Id.to_string x)) in
           let () =
             try ignore (Environ.lookup_named eid env)
-            with Not_found -> raise (ParameterWithoutEquality (VarRef x))
+            with Not_found -> raise (ParameterWithoutEquality (GlobRef.VarRef x))
           in
-          mkVar eid, Safe_typing.empty_private_constants
+          mkVar eid, Evd.empty_side_effects
         | Cast (x,_,_) -> aux (Term.applist (x,a))
         | App _ -> assert false
         | Ind ((kn',i as ind'),u) (*FIXME: universes *) -> 
-            if MutInd.equal kn kn' then mkRel(eqA-nlist-i+nb_ind-1), Safe_typing.empty_private_constants
+            if MutInd.equal kn kn' then mkRel(eqA-nlist-i+nb_ind-1), Evd.empty_side_effects
             else begin
               try
                 let eq, eff =
@@ -216,7 +215,7 @@ let build_beq_scheme mode kn =
                 let eqa, eff =
                   let eqa, effs = List.split (List.map aux a) in
                   Array.of_list eqa,
-                  List.fold_left Safe_typing.concat_private eff (List.rev effs)
+                  List.fold_left Evd.concat_side_effects eff (List.rev effs)
                   in
                 let args =
                   Array.append
@@ -239,8 +238,8 @@ let build_beq_scheme mode kn =
                  let kneq = Constant.change_label kn eq_lbl in
                  try let _ = Environ.constant_opt_value_in env (kneq, u) in
                    Term.applist (mkConst kneq,a),
-                   Safe_typing.empty_private_constants
-                 with Not_found -> raise (ParameterWithoutEquality (ConstRef kn)))
+                   Evd.empty_side_effects
+                 with Not_found -> raise (ParameterWithoutEquality (GlobRef.ConstRef kn)))
         | Proj _ -> raise (EqUnknown "projection")
         | Construct _ -> raise (EqUnknown "constructor")
         | Case _ -> raise (EqUnknown "match")
@@ -270,7 +269,7 @@ let build_beq_scheme mode kn =
     let constrsi = constrs (3+nparrec) in
     let n = Array.length constrsi in
     let ar = Array.make n (ff ()) in
-    let eff = ref Safe_typing.empty_private_constants in
+    let eff = ref Evd.empty_side_effects in
 	for i=0 to n-1 do
 	  let nb_cstr_args = List.length constrsi.(i).cs_args in
           let ar2 = Array.make n (ff ()) in
@@ -288,7 +287,7 @@ let build_beq_scheme mode kn =
                                           (nb_cstr_args+ndx+1)
                                           cc
                           in
-                          eff := Safe_typing.concat_private eff' !eff;
+                          eff := Evd.concat_side_effects eff' !eff;
                           Array.set eqs ndx
                               (mkApp (eqA,
                                 [|mkRel (ndx+1+nb_cstr_args);mkRel (ndx+1)|]
@@ -320,7 +319,7 @@ let build_beq_scheme mode kn =
     let names = Array.make nb_ind (make_annot Anonymous Sorts.Relevant) and
         types = Array.make nb_ind mkSet and
         cores = Array.make nb_ind mkSet in
-    let eff = ref Safe_typing.empty_private_constants in
+    let eff = ref Evd.empty_side_effects in
     let u = Univ.Instance.empty in
     for i=0 to (nb_ind-1) do
         names.(i) <- make_annot (Name (Id.of_string (rec_name i))) Sorts.Relevant;
@@ -328,7 +327,7 @@ let build_beq_scheme mode kn =
                      (mkArrow (mkFullInd ((kn,i),u) 1) Sorts.Relevant (bb ()));
         let c, eff' = make_one_eq i in
         cores.(i) <- c;
-        eff := Safe_typing.concat_private eff' !eff
+        eff := Evd.concat_side_effects eff' !eff
     done;
       (Array.init nb_ind (fun i ->
       let kelim = Inductive.elim_sort (mib,mib.mind_packets.(i)) in
@@ -346,7 +345,7 @@ let build_beq_scheme mode kn =
           Vars.substl subst cores.(i)
         in
         create_input fix),
-       UState.make (Global.universes ())),
+       UState.make ~lbound:(Global.universes_lbound ()) (Global.universes ())),
       !eff
 
 let beq_scheme_kind = declare_mutual_scheme_object "_beq" build_beq_scheme
@@ -655,7 +654,7 @@ repeat ( apply andb_prop in z;let z1:= fresh "Z" in destruct z as [z1 z]).
                         | App (c,ca) -> (
                           match EConstr.kind sigma c with
                           | Ind (indeq, u) ->
-                              if GlobRef.equal (IndRef indeq) Coqlib.(lib_ref "core.eq.type")
+                              if GlobRef.equal (GlobRef.IndRef indeq) Coqlib.(lib_ref "core.eq.type")
                               then
                                 Tacticals.New.tclTHEN
                                   (do_replace_bl mode bl_scheme_key ind
@@ -676,9 +675,9 @@ repeat ( apply andb_prop in z;let z1:= fresh "Z" in destruct z as [z1 z]).
 let bl_scheme_kind_aux = ref (fun _ -> failwith "Undefined")
 
 let side_effect_of_mode = function
-  | Declare.UserAutomaticRequest -> false
-  | Declare.InternalTacticRequest -> true
-  | Declare.UserIndividualRequest -> false
+  | UserAutomaticRequest -> false
+  | InternalTacticRequest -> true
+  | UserIndividualRequest -> false
 
 let make_bl_scheme mode mind =
   let mib = Global.lookup_mind mind in
@@ -691,10 +690,10 @@ let make_bl_scheme mode mind =
   let lnonparrec,lnamesparrec = (* TODO subst *)
     context_chop (nparams-nparrec) mib.mind_params_ctxt in
   let bl_goal, eff = compute_bl_goal ind lnamesparrec nparrec in
-  let ctx = UState.make (Global.universes ()) in
+  let ctx = UState.make ~lbound:(Global.universes_lbound ()) (Global.universes ()) in
   let side_eff = side_effect_of_mode mode in
   let bl_goal = EConstr.of_constr bl_goal in
-  let (ans, _, ctx) = Pfedit.build_by_tactic ~side_eff (Global.env()) ctx bl_goal
+  let (ans, _, ctx) = Pfedit.build_by_tactic ~poly:false ~side_eff (Global.env()) ctx bl_goal
     (compute_bl_tact mode (!bl_scheme_kind_aux()) (ind, EConstr.EInstance.empty) lnamesparrec nparrec)
   in
   ([|ans|], ctx), eff
@@ -821,10 +820,10 @@ let make_lb_scheme mode mind =
   let lnonparrec,lnamesparrec =
     context_chop (nparams-nparrec) mib.mind_params_ctxt in
   let lb_goal, eff = compute_lb_goal ind lnamesparrec nparrec in
-  let ctx = UState.make (Global.universes ()) in
+  let ctx = UState.make ~lbound:(Global.universes_lbound ()) (Global.universes ()) in
   let side_eff = side_effect_of_mode mode in
   let lb_goal = EConstr.of_constr lb_goal in
-  let (ans, _, ctx) = Pfedit.build_by_tactic ~side_eff (Global.env()) ctx lb_goal
+  let (ans, _, ctx) = Pfedit.build_by_tactic ~poly:false ~side_eff (Global.env()) ctx lb_goal
     (compute_lb_tact mode (!lb_scheme_kind_aux()) ind lnamesparrec nparrec)
   in
   ([|ans|], ctx), eff
@@ -938,7 +937,7 @@ let compute_dec_tact ind lnamesparrec nparrec =
     Not_found ->
       Tacticals.New.tclZEROMSG (str "Error during the decidability part, leibniz to boolean equality is required.")
   end >>= fun (lbI,eff'') ->
-  let eff = (Safe_typing.concat_private eff'' (Safe_typing.concat_private eff' eff)) in
+  let eff = (Evd.concat_side_effects eff'' (Evd.concat_side_effects eff' eff)) in
   Tacticals.New.tclTHENLIST [
         Proofview.tclEFFECTS eff;
         intros_using fresh_first_intros;
@@ -997,15 +996,15 @@ let make_eq_decidability mode mind =
   let nparams = mib.mind_nparams in
   let nparrec = mib.mind_nparams_rec in
   let u = Univ.Instance.empty in
-  let ctx = UState.make (Global.universes ()) in
+  let ctx = UState.make ~lbound:(Global.universes_lbound ()) (Global.universes ()) in
   let lnonparrec,lnamesparrec =
     context_chop (nparams-nparrec) mib.mind_params_ctxt in
   let side_eff = side_effect_of_mode mode in
-  let (ans, _, ctx) = Pfedit.build_by_tactic ~side_eff (Global.env()) ctx
+  let (ans, _, ctx) = Pfedit.build_by_tactic ~poly:false ~side_eff (Global.env()) ctx
     (EConstr.of_constr (compute_dec_goal (ind,u) lnamesparrec nparrec))
     (compute_dec_tact ind lnamesparrec nparrec)
   in
-  ([|ans|], ctx), Safe_typing.empty_private_constants
+  ([|ans|], ctx), Evd.empty_side_effects
 
 let eq_dec_scheme_kind =
   declare_mutual_scheme_object "_eq_dec" make_eq_decidability

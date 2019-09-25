@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -373,32 +373,24 @@ let tclTRYFOCUS i j t = tclFOCUS ~nosuchgoal:(tclUNIT ()) i j t
 let tclFOCUSLIST ?(nosuchgoal=tclZERO (NoSuchGoals 0)) l t =
   let open Proof in
   Comb.get >>= fun comb ->
-    let n = CList.length comb in
-    (* First, remove empty intervals, and bound the intervals to the number
-       of goals. *)
-    let sanitize (i, j) =
-      if i > j then None
-      else if i > n then None
-      else if j < 1 then None
-      else Some ((max i 1), (min j n))
-    in
-    let l = CList.map_filter sanitize l in
+  let n = CList.length comb in
+  let ok (i, j) = 1 <= i && i <= j && j <= n in
+  if not (CList.for_all ok l) then nosuchgoal
+  else
     match l with
-      | [] -> nosuchgoal
-      | (mi, _) :: _ ->
-          (* Get the left-most goal to focus. This goal won't move, and we
-             will then place all the other goals to focus to the right. *)
-          let mi = CList.fold_left (fun m (i, _) -> min m i) mi l in
-          (* [CList.goto] returns a zipper, so that
-             [(rev left) @ sub_right = comb]. *)
-          let left, sub_right = CList.goto (mi-1) comb in
-          let p x _ = CList.exists (fun (i, j) -> i <= x + mi && x + mi <= j) l in
-          let sub, right = CList.partitioni p sub_right in
-          let mj = mi - 1 + CList.length sub in
-            Comb.set (CList.rev_append left (sub @ right)) >>
-            tclFOCUS mi mj t
-
-
+    | [] -> nosuchgoal
+    | (mi, _) :: _ ->
+      (* Get the left-most goal to focus. This goal won't move, and we
+         will then place all the other goals to focus to the right. *)
+      let mi = CList.fold_left (fun m (i, _) -> min m i) mi l in
+      (* [CList.goto] returns a zipper, so that
+         [(rev left) @ sub_right = comb]. *)
+      let left, sub_right = CList.goto (mi-1) comb in
+      let p x _ = CList.exists (fun (i, j) -> i <= x + mi && x + mi <= j) l in
+      let sub, right = CList.partitioni p sub_right in
+      let mj = mi - 1 + CList.length sub in
+      Comb.set (CList.rev_append left (sub @ right)) >>
+      tclFOCUS mi mj t
 
 (** Like {!tclFOCUS} but selects a single goal by name. *)
 let tclFOCUSID ?(nosuchgoal=tclZERO (NoSuchGoals 1)) id t =
@@ -550,7 +542,7 @@ let tclDISPATCHGEN join tacs =
   let tacs = CList.map branch tacs in
   InfoL.tag (Info.Dispatch) (tclDISPATCHGEN0 join tacs)
 
-let tclDISPATCH tacs = tclDISPATCHGEN Pervasives.ignore tacs
+let tclDISPATCH tacs = tclDISPATCHGEN ignore tacs
 
 let tclDISPATCHL tacs = tclDISPATCHGEN CList.rev tacs
 
@@ -857,7 +849,8 @@ let give_up =
 
 module Progress = struct
 
-  let eq_constr = Evarutil.eq_constr_univs_test
+  let eq_constr evd extended_evd =
+    Evarutil.eq_constr_univs_test ~evd ~extended_evd
 
   (** equality function on hypothesis contexts *)
   let eq_named_context_val sigma1 sigma2 ctx1 ctx2 =
@@ -887,10 +880,10 @@ module Progress = struct
     eq_evar_body sigma1 sigma2 ei1.evar_body ei2.evar_body
 
   (** Equality function on goals *)
-  let goal_equal evars1 gl1 evars2 gl2 =
-    let evi1 = Evd.find evars1 gl1 in
-    let evi2 = Evd.find evars2 gl2 in
-    eq_evar_info evars1 evars2 evi1 evi2
+  let goal_equal ~evd ~extended_evd evar extended_evar =
+    let evi = Evd.find evd evar in
+    let extended_evi = Evd.find extended_evd extended_evar in
+    eq_evar_info evd extended_evd evi extended_evi
 
 end
 
@@ -907,18 +900,18 @@ let tclPROGRESS t =
   let test =
     quick_test ||
     Util.List.for_all2eq begin fun i f ->
-      Progress.goal_equal initial.solution (drop_state i) final.solution (drop_state f)
+      Progress.goal_equal ~evd:initial.solution
+        ~extended_evd:final.solution (drop_state i) (drop_state f)
     end initial.comb final.comb
   in
   if not test then
     tclUNIT res
   else
-    tclZERO (CErrors.UserError (Some "Proofview.tclPROGRESS" , Pp.str"Failed to progress."))
+    tclZERO (CErrors.UserError (Some "Proofview.tclPROGRESS", Pp.str "Failed to progress."))
 
-exception Timeout
 let _ = CErrors.register_handler begin function
-  | Timeout -> CErrors.user_err ~hdr:"Proofview.tclTIMEOUT" (Pp.str"Tactic timeout!")
-  | _ -> Pervasives.raise CErrors.Unhandled
+  | Logic_monad.Tac_Timeout -> CErrors.user_err ~hdr:"Proofview.tclTIMEOUT" (Pp.str"Tactic timeout!")
+  | _ -> raise CErrors.Unhandled
 end
 
 let tclTIMEOUT n t =
@@ -942,7 +935,8 @@ let tclTIMEOUT n t =
       end
       begin let open Logic_monad.NonLogical in function (e, info) ->
         match e with
-        | Logic_monad.Timeout -> return (Util.Inr (Timeout, info))
+        | Logic_monad.Tac_Timeout ->
+          return (Util.Inr (Logic_monad.Tac_Timeout, info))
         | Logic_monad.TacticFailure e ->
           return (Util.Inr (e, info))
         | e -> Logic_monad.NonLogical.raise ~info e

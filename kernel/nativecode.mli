@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -12,6 +12,7 @@ open Constr
 open Declarations
 open Environ
 open Nativelambda
+open Nativevalues
 
 (** This file defines the mllambda code generation phase of the native
 compiler. mllambda represents a fragment of ML, and can easily be printed
@@ -25,11 +26,6 @@ val pp_global : Format.formatter -> global -> unit
 val mk_open : string -> global
 
 (* Precomputed values for a compilation unit *)
-type symbol
-type symbols
-
-val empty_symbols : symbols
-
 val clear_symbols : unit -> unit
 
 val get_value : symbols -> int -> Nativevalues.t

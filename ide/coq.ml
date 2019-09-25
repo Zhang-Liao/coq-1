@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -102,7 +102,7 @@ let display_coqtop_answer cmd lines =
 
 let rec filter_coq_opts args =
   let argstr = String.concat " " (List.map Filename.quote args) in
-  let cmd = Filename.quote (coqtop_path ()) ^" -nois -filteropts " ^ argstr in
+  let cmd = Filename.quote (coqtop_path ()) ^" -nois -batch " ^ argstr in
   let cmd = requote cmd in
   let filtered_args = ref [] in
   let errlines = ref [] in

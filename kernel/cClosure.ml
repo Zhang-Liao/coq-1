@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -210,15 +210,6 @@ let betazeta = mkflags [fBETA;fZETA]
 let delta = mkflags [fDELTA]
 let zeta = mkflags [fZETA]
 let nored = no_red
-
-(* Removing fZETA for finer behaviour would break many developments *)
-let unfold_side_flags = [fBETA;fMATCH;fFIX;fCOFIX;fZETA]
-let unfold_side_red = mkflags [fBETA;fMATCH;fFIX;fCOFIX;fZETA]
-let unfold_red kn =
-  let flag = match kn with
-    | EvalVarRef id -> fVAR id
-    | EvalConstRef kn -> fCONST kn in
-  mkflags (flag::unfold_side_flags)
 
 (* Flags of reduction and cache of constants: 'a is a type that may be
  * mapped to constr. 'a infos implements a cache for constants and
@@ -1084,7 +1075,7 @@ module FNativeEntries =
 
     let mkInt env i =
       check_int env;
-      { mark = mark Norm KnownR; term = FInt i }
+      { mark = mark Cstr KnownR; term = FInt i }
 
     let mkBool env b =
       check_bool env;

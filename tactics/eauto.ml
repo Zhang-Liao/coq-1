@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -113,7 +113,7 @@ let priority l = List.map snd (List.filter (fun (pr,_) -> Int.equal pr 0) l)
 
 let unify_e_resolve poly flags (c,clenv) =
   Proofview.Goal.enter begin fun gl ->
-      let clenv', c = connect_hint_clenv poly c clenv gl in
+      let clenv', c = connect_hint_clenv ~poly c clenv gl in
       let clenv' = clenv_unique_resolver ~flags clenv' gl in
       Proofview.tclTHEN
         (Proofview.Unsafe.tclEVARUNIVCONTEXT (Evd.evar_universe_context clenv'.evd))
@@ -131,7 +131,7 @@ let hintmap_of sigma secvars hdc concl =
 
 let e_exact poly flags (c,clenv) =
   Proofview.Goal.enter begin fun gl ->
-    let clenv', c = connect_hint_clenv poly c clenv gl in
+    let clenv', c = connect_hint_clenv ~poly c clenv gl in
     Tacticals.New.tclTHEN
     (Proofview.Unsafe.tclEVARUNIVCONTEXT (Evd.evar_universe_context clenv'.evd))
     (e_give_exact c)
@@ -168,7 +168,7 @@ and e_my_find_search env sigma db_list local_db secvars hdc concl =
       in
       (b,
         let tac = function
-        | Res_pf (term,cl) -> unify_resolve poly st (term,cl)
+        | Res_pf (term,cl) -> unify_resolve ~poly st (term,cl)
         | ERes_pf (term,cl) -> unify_e_resolve poly st (term,cl)
         | Give_exact (c,cl) -> e_exact poly st (c,cl)
         | Res_pf_THEN_trivial_fail (term,cl) ->
@@ -351,13 +351,13 @@ let mk_eauto_dbg d =
   else Off
 
 let pr_info_nop = function
-  | Info -> Feedback.msg_info (str "idtac.")
+  | Info -> Feedback.msg_notice (str "idtac.")
   | _ -> ()
 
 let pr_dbg_header = function
   | Off -> ()
-  | Debug -> Feedback.msg_debug (str "(* debug eauto: *)")
-  | Info  -> Feedback.msg_info (str "(* info eauto: *)")
+  | Debug -> Feedback.msg_notice (str "(* debug eauto: *)")
+  | Info  -> Feedback.msg_notice (str "(* info eauto: *)")
 
 let pr_info dbg s =
   if dbg != Info then ()
@@ -368,7 +368,7 @@ let pr_info dbg s =
 	| State sp ->
 	  let mindepth = loop sp in
 	  let indent = String.make (mindepth - sp.depth) ' ' in
-	  Feedback.msg_info (str indent ++ Lazy.force s.last_tactic ++ str ".");
+          Feedback.msg_notice (str indent ++ Lazy.force s.last_tactic ++ str ".");
 	  mindepth
     in
     ignore (loop s)
@@ -408,7 +408,7 @@ let e_search_auto debug (in_depth,p) lems db_list gl =
 (* let e_search_auto = CProfile.profile5 e_search_auto_key e_search_auto *)
 
 let eauto_with_bases ?(debug=Off) np lems db_list =
-  Proofview.V82.of_tactic (Hints.wrap_hint_warning (Proofview.V82.tactic (tclTRY (e_search_auto debug np lems db_list))))
+  Hints.wrap_hint_warning (Proofview.V82.tactic (tclTRY (e_search_auto debug np lems db_list)))
 
 let eauto ?(debug=Off) np lems dbnames =
   let db_list = make_db_list dbnames in

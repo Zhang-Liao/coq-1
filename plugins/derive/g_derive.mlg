@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -18,11 +18,11 @@ DECLARE PLUGIN "derive_plugin"
 
 {
 
-let classify_derive_command _ = Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]),VtLater)
+let classify_derive_command _ = Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]))
 
 }
 
 VERNAC COMMAND EXTEND Derive CLASSIFIED BY { classify_derive_command } STATE open_proof
 | [ "Derive" ident(f) "SuchThat" constr(suchthat) "As" ident(lemma) ] ->
-  { Derive.(start_deriving f suchthat lemma) }
+  { Derive.start_deriving f suchthat lemma }
 END

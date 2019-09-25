@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -22,14 +22,11 @@ open Namegen
 open Evd
 open Printer
 open Reductionops
-open Entries
 open Inductiveops
 open Tacmach.New
 open Clenv
-open Declare
 open Tacticals.New
 open Tactics
-open Decl_kinds
 open Context.Named.Declaration
 
 module NamedDecl = Context.Named.Declaration
@@ -237,8 +234,8 @@ let inversion_scheme ~name ~poly env sigma t sort dep_option inv_op =
 let add_inversion_lemma ~poly name env sigma t sort dep inv_op =
   let invProof, sigma = inversion_scheme ~name ~poly env sigma t sort dep inv_op in
   let univs = Evd.univ_entry ~poly sigma in
-  let entry = definition_entry ~univs invProof in
-  let _ = declare_constant name (DefinitionEntry entry, IsProof Lemma) in
+  let entry = Declare.definition_entry ~univs invProof in
+  let _ : Names.Constant.t = Declare.declare_constant ~name ~kind:Decls.(IsProof Lemma) (Declare.DefinitionEntry entry) in
   ()
 
 (* inv_op = Inv (derives de complete inv. lemma)

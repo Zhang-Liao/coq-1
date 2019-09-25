@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -136,7 +136,7 @@ let pure_sos  l =
     I should nonetheless be able to try something - over Z  > is equivalent to -1  >= *)
  try
   let l = List.combine l (CList.interval 0 (List.length l -1)) in
-  let (lt,i) =  try (List.find (fun (x,_) -> Pervasives.(=) (snd x) Mc.Strict) l)
+  let (lt,i) =  try (List.find (fun (x,_) -> (=) (snd x) Mc.Strict) l)
    with Not_found -> List.hd l in
   let plt = poly_neg (poly_of_term (expr_to_term (fst lt))) in
   let (n,polys) = sumofsquares plt in (* n * (ci * pi^2) *)

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -10,7 +10,6 @@
 
 open Pp
 open Util
-open Entries
 open Redexpr
 open Constrintern
 open Pretyping
@@ -27,20 +26,21 @@ let warn_implicits_in_term =
   CWarnings.create ~name:"implicits-in-term" ~category:"implicits"
          (fun () ->
           strbrk "Implicit arguments declaration relies on type." ++ spc () ++
-            strbrk "The term declares more implicits than the type here.")
+            strbrk "Discarding incompatible declaration in term.")
 
 let check_imps ~impsty ~impsbody =
-  let b =
-    try
-      List.for_all (fun (key, (va:bool*bool*bool)) ->
-          (* Pervasives.(=) is OK for this type *)
-          Pervasives.(=) (List.assoc_f Constrexpr_ops.explicitation_eq key impsty) va)
-        impsbody
-    with Not_found -> false
-  in
-  if not b then warn_implicits_in_term ()
+  let rec aux impsty impsbody =
+  match impsty, impsbody with
+  | a1 :: impsty, a2 :: impsbody ->
+    (match a1.CAst.v, a2.CAst.v with
+    | None , None -> aux impsty impsbody
+    | Some _ , Some _ -> aux impsty impsbody
+    | _, _ -> warn_implicits_in_term ?loc:a2.CAst.loc ())
+  | _ :: _, [] | [], _ :: _ -> (* Information only on one side *) ()
+  | [], [] -> () in
+  aux impsty impsbody
 
-let interp_definition ~program_mode pl bl poly red_option c ctypopt =
+let interp_definition ~program_mode pl bl ~poly red_option c ctypopt =
   let env = Global.env() in
   (* Explicitly bound universes and constraints *)
   let evd, udecl = Constrexpr_ops.interp_univ_decl_opt env pl in
@@ -56,11 +56,11 @@ let interp_definition ~program_mode pl bl poly red_option c ctypopt =
     match tyopt with
     | None ->
       let evd, (c, impsbody) = interp_constr_evars_impls ~program_mode ~impls env_bl evd c in
-      evd, c, imps1@Impargs.lift_implicits (Context.Rel.nhyps ctx) impsbody, None
+      evd, c, imps1@impsbody, None
     | Some (ty, impsty) ->
       let evd, (c, impsbody) = interp_casted_constr_evars_impls ~program_mode ~impls env_bl evd c ty in
       check_imps ~impsty ~impsbody;
-      evd, c, imps1@Impargs.lift_implicits (Context.Rel.nhyps ctx) impsty, Some ty
+      evd, c, imps1@impsty, Some ty
   in
   (* Do the reduction *)
   let evd, c = red_constant_body red_option env_bl evd c in
@@ -79,29 +79,29 @@ let check_definition ~program_mode (ce, evd, _, imps) =
   check_evars_are_solved ~program_mode env evd;
   ce
 
-let do_definition ~program_mode ?hook ident k univdecl bl red_option c ctypopt =
+let do_definition ~program_mode ?hook ~name ~scope ~poly ~kind univdecl bl red_option c ctypopt =
   let (ce, evd, univdecl, imps as def) =
-    interp_definition ~program_mode univdecl bl (pi2 k) red_option c ctypopt
+    interp_definition ~program_mode univdecl bl ~poly red_option c ctypopt
   in
   if program_mode then
     let env = Global.env () in
-    let (c,ctx), sideff = Future.force ce.const_entry_body in
-    assert(Safe_typing.empty_private_constants = sideff);
+    let (c,ctx), sideff = Future.force ce.Declare.proof_entry_body in
+    assert(Safe_typing.empty_private_constants = sideff.Evd.seff_private);
     assert(Univ.ContextSet.is_empty ctx);
     Obligations.check_evars env evd;
     let c = EConstr.of_constr c in
-    let typ = match ce.const_entry_type with
+    let typ = match ce.Declare.proof_entry_type with
       | Some t -> EConstr.of_constr t
       | None -> Retyping.get_type_of env evd c
     in
     let obls, _, c, cty =
-      Obligations.eterm_obligations env ident evd 0 c typ
+      Obligations.eterm_obligations env name evd 0 c typ
     in
     let ctx = Evd.evar_universe_context evd in
     ignore(Obligations.add_definition
-             ident ~term:c cty ctx ~univdecl ~implicits:imps ~kind:k ?hook obls)
+             ~name ~term:c cty ctx ~univdecl ~implicits:imps ~scope ~poly ~kind ?hook obls)
   else
     let ce = check_definition ~program_mode def in
     let uctx = Evd.evar_universe_context evd in
     let hook_data = Option.map (fun hook -> hook, uctx, []) hook in
-    ignore(DeclareDef.declare_definition ident k ?hook_data ce (Evd.universe_binders evd) imps)
+    ignore(DeclareDef.declare_definition ~name ~scope ~kind ?hook_data (Evd.universe_binders evd) ce imps)

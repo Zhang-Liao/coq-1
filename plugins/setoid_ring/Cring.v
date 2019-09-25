@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -19,6 +19,7 @@ Require Export Algebra_syntax.
 Require Export Ncring.
 Require Export Ncring_initial.
 Require Export Ncring_tac.
+Require Import InitialRing.
 
 Class Cring {R:Type}`{Rr:Ring R} := 
  cring_mul_comm: forall x y:R, x * y == y * x.

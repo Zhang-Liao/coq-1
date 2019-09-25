@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,6 @@ open Pp
 open Names
 open Environ
 open Declarations
-open Globnames
 open Libnames
 open Goptions
 
@@ -231,19 +230,19 @@ let nametab_register_body mp dir (l,body) =
     | SFBmodule _ -> () (* TODO *)
     | SFBmodtype _ -> () (* TODO *)
     | SFBconst _ ->
-      push (Label.to_id l) (ConstRef (Constant.make2 mp l))
+      push (Label.to_id l) (GlobRef.ConstRef (Constant.make2 mp l))
     | SFBmind mib ->
       let mind = MutInd.make2 mp l in
       Array.iteri
 	(fun i mip ->
-	  push mip.mind_typename (IndRef (mind,i));
-	  Array.iteri (fun j id -> push id (ConstructRef ((mind,i),j+1)))
+          push mip.mind_typename (GlobRef.IndRef (mind,i));
+          Array.iteri (fun j id -> push id (GlobRef.ConstructRef ((mind,i),j+1)))
 	    mip.mind_consnames)
 	mib.mind_packets
 
 let nametab_register_module_body mp struc =
   (* If [mp] is a globally visible module, we simply import it *)
-  try Declaremods.really_import_module mp
+  try Declaremods.import_module ~export:false mp
   with Not_found ->
     (* Otherwise we try to emulate an import by playing with nametab *)
     nametab_register_dir mp;
@@ -297,7 +296,7 @@ let print_body is_impl extent env mp (l,body) =
 		hov 2 (str ":= " ++
                        Printer.pr_lconstr_env env sigma (Mod_subst.force_constr l))
 	      | _ -> mt ()) ++ str "." ++
-            Printer.pr_abstract_universe_ctx sigma ctx ?priv:cb.const_private_poly_univs)
+            Printer.pr_abstract_universe_ctx sigma ctx)
     | SFBmind mib ->
       match extent with
       | WithContents ->

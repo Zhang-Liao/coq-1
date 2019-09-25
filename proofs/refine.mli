@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -26,9 +26,6 @@ val refine : typecheck:bool -> (Evd.evar_map -> Evd.evar_map * EConstr.t) -> uni
     new holes created by [t] become the new subgoals. Exceptions
     raised during the interpretation of [t] are caught and result in
     tactic failures. If [typecheck] is [true] [t] is type-checked beforehand. *)
-
-val refine_one : typecheck:bool -> (Evd.evar_map -> Evd.evar_map * ('a * EConstr.t)) -> 'a tactic
-(** A variant of [refine] which assumes exactly one goal under focus *)
 
 val generic_refine : typecheck:bool -> ('a * EConstr.t) tactic ->
   Proofview.Goal.t -> 'a tactic

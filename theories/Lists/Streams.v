@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -12,13 +12,13 @@ Set Implicit Arguments.
 
 (** Streams *)
 
+CoInductive Stream (A : Type) :=
+  Cons : A -> Stream A -> Stream A.
+
 Section Streams.
+  Variable A : Type.
 
-Variable A : Type.
-
-#[universes(template)]
-CoInductive Stream : Type :=
-    Cons : A -> Stream -> Stream.
+  Notation Stream := (Stream A).
 
 
 Definition hd (x:Stream) := match x with

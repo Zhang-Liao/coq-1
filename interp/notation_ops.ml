@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,6 @@ open Names
 open Nameops
 open Constr
 open Globnames
-open Decl_kinds
 open Namegen
 open Glob_term
 open Glob_ops
@@ -781,7 +780,7 @@ let rec pat_binder_of_term t = DAst.map (function
   | GVar id -> PatVar (Name id)
   | GApp (t, l) ->
     begin match DAst.get t with
-    | GRef (ConstructRef cstr,_) ->
+    | GRef (GlobRef.ConstructRef cstr,_) ->
      let nparams = Inductiveops.inductive_nparams (Global.env()) (fst cstr) in
      let _,l = List.chop nparams l in
      PatCstr (cstr, List.map pat_binder_of_term l, Anonymous)
@@ -1190,7 +1189,11 @@ let rec match_ inner u alp metas sigma a1 a2 =
       Array.fold_left2 (match_in u alp metas) sigma bl1 bl2
   | GCast(t1, c1), NCast(t2, c2) ->
     match_cast (match_in u alp metas) (match_in u alp metas sigma t1 t2) c1 c2
-  | GSort (GType _), NSort (GType _) when not u -> sigma
+
+  (* Next pair of lines useful only if not coming from detyping *)
+  | GSort (UNamed [(GProp|GSet),0]), NSort (UAnonymous _) -> raise No_match
+  | GSort _, NSort (UAnonymous _) when not u -> sigma
+
   | GSort s1, NSort s2 when glob_sort_eq s1 s2 -> sigma
   | GInt i1, NInt i2 when Uint63.equal i1 i2 -> sigma
   | GPatVar _, NHole _ -> (*Don't hide Metas, they bind in ltac*) raise No_match
@@ -1333,10 +1336,10 @@ let rec match_cases_pattern metas (terms,termlists,(),() as sigma) a1 a2 =
  match DAst.get a1, a2 with
   | r1, NVar id2 when Id.List.mem_assoc id2 metas -> (bind_env_cases_pattern sigma id2 a1),(0,[])
   | PatVar Anonymous, NHole _ -> sigma,(0,[])
-  | PatCstr ((ind,_ as r1),largs,Anonymous), NRef (ConstructRef r2) when eq_constructor r1 r2 ->
+  | PatCstr ((ind,_ as r1),largs,Anonymous), NRef (GlobRef.ConstructRef r2) when eq_constructor r1 r2 ->
       let l = try add_patterns_for_params_remove_local_defs (Global.env ()) r1 largs with Not_found -> raise No_match in
       sigma,(0,l)
-  | PatCstr ((ind,_ as r1),args1,Anonymous), NApp (NRef (ConstructRef r2),l2)
+  | PatCstr ((ind,_ as r1),args1,Anonymous), NApp (NRef (GlobRef.ConstructRef r2),l2)
       when eq_constructor r1 r2 ->
       let l1 = try add_patterns_for_params_remove_local_defs (Global.env()) r1 args1 with Not_found -> raise No_match in
       let le2 = List.length l2 in
@@ -1358,9 +1361,9 @@ and match_cases_pattern_no_more_args metas sigma a1 a2 =
 
 let match_ind_pattern metas sigma ind pats a2 =
   match a2 with
-  | NRef (IndRef r2) when eq_ind ind r2 ->
+  | NRef (GlobRef.IndRef r2) when eq_ind ind r2 ->
       sigma,(0,pats)
-  | NApp (NRef (IndRef r2),l2)
+  | NApp (NRef (GlobRef.IndRef r2),l2)
       when eq_ind ind r2 ->
       let le2 = List.length l2 in
       if Int.equal le2 0 (* Special case of a notation for a @Cstr *) || le2 > List.length pats

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -83,7 +83,7 @@ open Obligations
 let obligation obl tac = with_tac (fun t -> Obligations.obligation obl t) tac
 let next_obligation obl tac = with_tac (fun t -> Obligations.next_obligation obl t) tac
 
-let classify_obbl _ = Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]), VtLater)
+let classify_obbl _ = Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]))
 
 }
 
@@ -145,7 +145,7 @@ open Pp
 
 VERNAC COMMAND EXTEND Show_Solver CLASSIFIED AS QUERY
 | [ "Show" "Obligation" "Tactic" ] -> {
-    Feedback.msg_info (str"Program obligation tactic is " ++ print_default_tactic ()) }
+    Feedback.msg_notice (str"Program obligation tactic is " ++ print_default_tactic ()) }
 END
 
 VERNAC COMMAND EXTEND Show_Obligations CLASSIFIED AS QUERY
@@ -154,8 +154,8 @@ VERNAC COMMAND EXTEND Show_Obligations CLASSIFIED AS QUERY
 END
 
 VERNAC COMMAND EXTEND Show_Preterm CLASSIFIED AS QUERY
-| [ "Preterm" "of" ident(name) ] -> { Feedback.msg_info (show_term (Some name)) }
-| [ "Preterm" ] -> { Feedback.msg_info (show_term None) }
+| [ "Preterm" "of" ident(name) ] -> { Feedback.msg_notice (show_term (Some name)) }
+| [ "Preterm" ] -> { Feedback.msg_notice (show_term None) }
 END
 
 {

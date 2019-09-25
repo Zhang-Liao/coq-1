@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -242,10 +242,10 @@ let set_prompt prompt =
 
 (* Read the input stream until a dot is encountered *)
 let parse_to_dot =
-  let rec dot st = match Stream.next st with
+  let rec dot tok st = match Stream.next st with
     | Tok.KEYWORD ("."|"...") -> ()
     | Tok.EOI -> ()
-    | _ -> dot st
+    | _ -> dot tok st
   in
   Pcoq.Entry.of_parser "Coqtoplevel.dot" dot
 
@@ -315,8 +315,8 @@ let coqloop_feed (fb : Feedback.feedback) = let open Feedback in
 (* Flush in a compatible order with 8.5 *)
 (* This mimics the semantics of the old Pp.flush_all *)
 let loop_flush_all () =
-  Pervasives.flush stderr;
-  Pervasives.flush stdout;
+  flush stderr;
+  flush stdout;
   Format.pp_print_flush !Topfmt.std_ft ();
   Format.pp_print_flush !Topfmt.err_ft ()
 
@@ -340,8 +340,8 @@ let print_anyway_opts = [
 
 let print_anyway c =
   let open Vernacexpr in
-  match c with
-  | VernacExpr (_, VernacSetOption (_, opt, _)) -> List.mem opt print_anyway_opts
+  match c.expr with
+  | VernacSetOption (_, opt, _) -> List.mem opt print_anyway_opts
   | _ -> false
 
 (* We try to behave better when goal printing raises an exception
@@ -383,7 +383,7 @@ let rec vernac_loop ~state =
   try
     let input = top_buffer.tokens in
     match read_sentence ~state input with
-    | Some (VernacBacktrack(bid,_,_)) ->
+    | Some (VernacBackTo bid) ->
       let bid = Stateid.of_int bid in
       let doc, res = Stm.edit_at ~doc:state.doc bid in
       assert (res = `NewTip);
@@ -402,6 +402,11 @@ let rec vernac_loop ~state =
       let nstate = Vernac.process_expr ~state (make ?loc c) in
       top_goal_print ~doc:state.doc c state.proof nstate.proof;
       vernac_loop ~state:nstate
+
+    | Some (VernacShowGoal {gid; sid}) ->
+      let proof = Stm.get_proof ~doc:state.doc (Stateid.of_int sid) in
+      Feedback.msg_notice (Printer.pr_goal_emacs ~proof gid sid);
+      vernac_loop ~state
 
     | None ->
       top_stderr (fnl ()); exit 0
@@ -433,19 +438,15 @@ let rec loop ~state =
       loop ~state
 
 (* Default toplevel loop *)
-let warning s = Flags.(with_option warn Feedback.msg_warning (strbrk s))
 
 let drop_args = ref None
+
 let loop ~opts ~state =
   drop_args := Some opts;
   let open Coqargs in
-  print_emacs := opts.print_emacs;
+  print_emacs := opts.config.print_emacs;
   (* We initialize the console only if we run the toploop_run *)
   let tl_feed = Feedback.add_feeder coqloop_feed in
-  if Dumpglob.dump () then begin
-    Flags.if_verbose warning "Dumpglob cannot be used in interactive mode.";
-    Dumpglob.noglob ()
-  end;
   let _ = loop ~state in
   (* Initialise and launch the Ocaml toplevel *)
   Coqinit.init_ocaml_path();

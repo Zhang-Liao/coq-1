@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -59,8 +59,9 @@ type globals = {
 
 type stratification = {
   env_universes : UGraph.t;
-  env_engagement : engagement;
   env_sprop_allowed : bool;
+  env_universes_lbound : Univ.Level.t;
+  env_engagement : engagement
 }
 
 type val_kind =
@@ -95,6 +96,7 @@ type env = {
   env_typing_flags  : typing_flags;
   retroknowledge : Retroknowledge.retroknowledge;
   indirect_pterms : Opaqueproof.opaquetab;
+  native_symbols : Nativevalues.symbols DPmap.t;
 }
 
 let empty_named_context_val = {
@@ -118,12 +120,14 @@ let empty_env = {
   env_nb_rel = 0;
   env_stratification = {
     env_universes = UGraph.initial_universes;
-    env_engagement = PredicativeSet;
     env_sprop_allowed = false;
-  };
+    env_universes_lbound = Univ.Level.set;
+    env_engagement = PredicativeSet };
   env_typing_flags = Declareops.safe_flags Conv_oracle.empty;
   retroknowledge = Retroknowledge.empty;
-  indirect_pterms = Opaqueproof.empty_opaquetab }
+  indirect_pterms = Opaqueproof.empty_opaquetab;
+  native_symbols = DPmap.empty;
+}
 
 
 (* Rel context *)
@@ -213,6 +217,9 @@ let lookup_named_ctxt id ctxt =
 let fold_constants f env acc =
   Cmap_env.fold (fun c (body,_) acc -> f c body acc) env.env_globals.env_constants acc
 
+let fold_inductives f env acc =
+  Mindmap_env.fold (fun c (body,_) acc -> f c body acc) env.env_globals.env_inductives acc
+
 (* Global constants *)
 
 let lookup_constant_key kn env =
@@ -256,8 +263,15 @@ let type_in_type env = not (typing_flags env).check_universes
 let deactivated_guard env = not (typing_flags env).check_guarded
 
 let indices_matter env = env.env_typing_flags.indices_matter
+let check_template env = env.env_typing_flags.check_template
 
 let universes env = env.env_stratification.env_universes
+let universes_lbound env = env.env_stratification.env_universes_lbound
+
+let set_universes_lbound env lbound =
+  let env_stratification = { env.env_stratification with env_universes_lbound = lbound } in
+  { env with env_stratification }
+
 let named_context env = env.env_named_context.env_named_ctx
 let named_context_val env = env.env_named_context
 let rel_context env = env.env_rel_context.env_rel_ctx
@@ -376,29 +390,30 @@ let check_constraints c env =
 let push_constraints_to_env (_,univs) env =
   add_constraints univs env
 
-let add_universes strict ctx g =
+let add_universes ~lbound ~strict ctx g =
   let g = Array.fold_left
-            (fun g v -> UGraph.add_universe v strict g)
+            (fun g v -> UGraph.add_universe ~lbound ~strict v g)
 	    g (Univ.Instance.to_array (Univ.UContext.instance ctx))
   in
     UGraph.merge_constraints (Univ.UContext.constraints ctx) g
 			   
 let push_context ?(strict=false) ctx env =
-  map_universes (add_universes strict ctx) env
+  map_universes (add_universes ~lbound:(universes_lbound env) ~strict ctx) env
 
-let add_universes_set strict ctx g =
+let add_universes_set ~lbound ~strict ctx g =
   let g = Univ.LSet.fold
             (* Be lenient, module typing reintroduces universes and constraints due to includes *)
-	    (fun v g -> try UGraph.add_universe v strict g with UGraph.AlreadyDeclared -> g)
+            (fun v g -> try UGraph.add_universe ~lbound ~strict v g with UGraph.AlreadyDeclared -> g)
 	    (Univ.ContextSet.levels ctx) g
   in UGraph.merge_constraints (Univ.ContextSet.constraints ctx) g
 
 let push_context_set ?(strict=false) ctx env =
-  map_universes (add_universes_set strict ctx) env
+  map_universes (add_universes_set ~lbound:(universes_lbound env) ~strict ctx) env
 
 let push_subgraph (levels,csts) env =
+  let lbound = universes_lbound env in
   let add_subgraph g =
-    let newg = Univ.LSet.fold (fun v g -> UGraph.add_universe v false g) levels g in
+    let newg = Univ.LSet.fold (fun v g -> UGraph.add_universe ~lbound ~strict:false v g) levels g in
     let newg = UGraph.merge_constraints csts newg in
     (if not (Univ.Constraint.is_empty csts) then
        let restricted = UGraph.constraints_for ~kept:(UGraph.domain g) newg in
@@ -415,20 +430,24 @@ let set_engagement c env = (* Unsafe *)
 (* It's convenient to use [{flags with foo = bar}] so we're smart wrt to it. *)
 let same_flags {
      check_guarded;
+     check_positive;
      check_universes;
      conv_oracle;
      indices_matter;
      share_reduction;
      enable_VM;
      enable_native_compiler;
+     check_template;
   } alt =
   check_guarded == alt.check_guarded &&
+  check_positive == alt.check_positive &&
   check_universes == alt.check_universes &&
   conv_oracle == alt.conv_oracle &&
   indices_matter == alt.indices_matter &&
   share_reduction == alt.share_reduction &&
   enable_VM == alt.enable_VM &&
-  enable_native_compiler == alt.enable_native_compiler
+  enable_native_compiler == alt.enable_native_compiler &&
+  check_template == alt.check_template
 [@warning "+9"]
 
 let set_typing_flags c env = (* Unsafe *)
@@ -560,10 +579,19 @@ let polymorphic_pind (ind,u) env =
 let type_in_type_ind (mind,_i) env =
   not (lookup_mind mind env).mind_typing_flags.check_universes
 
+let template_checked_ind (mind,_i) env =
+  (lookup_mind mind env).mind_typing_flags.check_template
+
 let template_polymorphic_ind (mind,i) env =
   match (lookup_mind mind env).mind_packets.(i).mind_arity with 
   | TemplateArity _ -> true
   | RegularArity _ -> false
+
+let template_polymorphic_variables (mind,i) env =
+  match (lookup_mind mind env).mind_packets.(i).mind_arity with
+  | TemplateArity { Declarations.template_param_levels = l; _ } ->
+    List.map_filter (fun level -> level) l
+  | RegularArity _ -> []
 
 let template_polymorphic_pind (ind,u) env =
   if not (Univ.Instance.is_empty u) then false
@@ -754,6 +782,22 @@ let is_template_polymorphic env r =
   | IndRef ind -> template_polymorphic_ind ind env
   | ConstructRef cstr -> template_polymorphic_ind (inductive_of_constructor cstr) env
 
+let get_template_polymorphic_variables env r =
+  let open Names.GlobRef in
+  match r with
+  | VarRef _id -> []
+  | ConstRef _c -> []
+  | IndRef ind -> template_polymorphic_variables ind env
+  | ConstructRef cstr -> template_polymorphic_variables (inductive_of_constructor cstr) env
+
+let is_template_checked env r =
+  let open Names.GlobRef in
+  match r with
+  | VarRef _id -> false
+  | ConstRef _c -> false
+  | IndRef ind -> template_checked_ind ind env
+  | ConstructRef cstr -> template_checked_ind (inductive_of_constructor cstr) env
+
 let is_type_in_type env r =
   let open Names.GlobRef in
   match r with
@@ -763,3 +807,7 @@ let is_type_in_type env r =
   | ConstructRef cstr -> type_in_type_ind (inductive_of_constructor cstr) env
 
 let set_retroknowledge env r = { env with retroknowledge = r }
+
+let set_native_symbols env native_symbols = { env with native_symbols }
+let add_native_symbols dir syms env =
+  { env with native_symbols = DPmap.add dir syms env.native_symbols }

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -67,7 +67,7 @@ module Vernac_ =
 
     let command_entry =
       Pcoq.Entry.of_parser "command_entry"
-        (fun strm -> Pcoq.Entry.parse_token_stream (select_tactic_entry !command_entry_ref) strm)
+        (fun _ strm -> Pcoq.Entry.parse_token_stream (select_tactic_entry !command_entry_ref) strm)
 
   end
 

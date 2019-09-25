@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -16,6 +16,12 @@ open Tactypes
 open Tacexpr
 
 (** Tactic related witnesses, could also live in tactics/ if other users *)
+(* To keep after deprecation phase but it will get a different parsing semantics in pltac.ml *)
+val wit_intropattern : (constr_expr intro_pattern_expr CAst.t, glob_constr_and_expr intro_pattern_expr CAst.t, intro_pattern) genarg_type
+[@@ocaml.deprecated "Use wit_simple_intropattern"]
+
+val wit_simple_intropattern : (constr_expr intro_pattern_expr CAst.t, glob_constr_and_expr intro_pattern_expr CAst.t, intro_pattern) genarg_type
+
 val wit_intro_pattern : (constr_expr intro_pattern_expr CAst.t, glob_constr_and_expr intro_pattern_expr CAst.t, intro_pattern) genarg_type
 
 val wit_quant_hyp : quantified_hypothesis uniform_genarg_type
@@ -36,7 +42,6 @@ val wit_bindings :
   constr bindings delayed_open) genarg_type
 
 val wit_quantified_hypothesis : quantified_hypothesis uniform_genarg_type
-val wit_intropattern : (constr_expr intro_pattern_expr CAst.t, glob_constr_and_expr intro_pattern_expr CAst.t, intro_pattern) genarg_type
 
 (** Generic arguments based on Ltac. *)
 

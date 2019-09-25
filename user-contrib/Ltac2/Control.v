@@ -1,12 +1,15 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 Require Import Ltac2.Init.
+Require Ltac2.Message.
 
 (** Panic *)
 
@@ -74,3 +77,28 @@ Ltac2 @ external abstract : ident option -> (unit -> unit) -> unit := "ltac2" "a
 
 Ltac2 @ external check_interrupt : unit -> unit := "ltac2" "check_interrupt".
 (** For internal use. *)
+
+(** Assertions throwing exceptions and short form throws *)
+
+Ltac2 throw_invalid_argument (msg : string) :=
+  Control.throw (Invalid_argument (Some (Message.of_string msg))).
+
+Ltac2 throw_out_of_bounds (msg : string) :=
+  Control.throw (Out_of_bounds (Some (Message.of_string msg))).
+
+Ltac2 assert_valid_argument (msg : string) (test : bool) :=
+  match test with
+  | true => ()
+  | false => throw_invalid_argument msg
+  end.
+
+Ltac2 assert_bounds (msg : string) (test : bool) :=
+  match test with
+  | true => ()
+  | false => throw_out_of_bounds msg
+  end.
+
+(** Short form backtracks *)
+
+Ltac2 backtrack_tactic_failure (msg : string) :=
+  Control.zero (Tactic_failure (Some (Message.of_string msg))).

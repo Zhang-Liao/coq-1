@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -331,11 +331,16 @@ let push_rel_decl_to_named_context
   let map_decl f d =
     NamedDecl.map_constr f d
   in
-  let replace_var_named_declaration id0 id decl =
-    let id' = NamedDecl.get_id decl in
-    let id' = if Id.equal id0 id' then id else id' in
-    let vsubst = [id0 , mkVar id] in
-    decl |> NamedDecl.set_id id' |> map_decl (replace_vars vsubst)
+  let rec replace_var_named_declaration id0 id = function
+  | [] -> []
+  | decl :: nc ->
+    if Id.equal id0 (NamedDecl.get_id decl) then
+      (* Stop here, the variable cannot occur before its definition *)
+      (NamedDecl.set_id id decl) :: nc
+    else
+      let nc = replace_var_named_declaration id0 id nc in
+      let vsubst = [id0 , mkVar id] in
+      map_decl (fun c -> replace_vars vsubst c) decl :: nc
   in
   let extract_if_neq id = function
     | Anonymous -> None
@@ -366,7 +371,7 @@ let push_rel_decl_to_named_context
           context. Unless [id] is a section variable. *)
       let subst = update_var id0 id subst in
       let d = decl |> NamedDecl.of_rel_decl (fun _ -> id0) |> map_decl (csubst_subst subst) in
-      let nc = List.map (replace_var_named_declaration id0 id) nc in
+      let nc = replace_var_named_declaration id0 id nc in
       (push_var id0 subst, Id.Set.add id avoid, d :: nc)
   | Some id0 when hypnaming = FailIfConflict ->
        user_err Pp.(Id.print id0 ++ str " is already used.")
@@ -856,12 +861,12 @@ let compare_constructor_instances evd u u' =
   in
   Evd.add_universe_constraints evd soft
 
-(** [eq_constr_univs_test sigma1 sigma2 t u] tests equality of [t] and
-    [u] up to existential variable instantiation and equalisable
-    universes. The term [t] is interpreted in [sigma1] while [u] is
-    interpreted in [sigma2]. The universe constraints in [sigma2] are
-    assumed to be an extension of those in [sigma1]. *)
-let eq_constr_univs_test sigma1 sigma2 t u =
+(** [eq_constr_univs_test ~evd ~extended_evd t u] tests equality of
+    [t] and [u] up to existential variable instantiation and
+    equalisable universes. The term [t] is interpreted in [evd] while
+    [u] is interpreted in [extended_evd]. The universe constraints in
+    [extended_evd] are assumed to be an extension of those in [evd]. *)
+let eq_constr_univs_test ~evd ~extended_evd t u =
   (* spiwack: mild code duplication with {!Evd.eq_constr_univs}. *)
   let open Evd in
   let t = EConstr.Unsafe.to_constr t
@@ -872,8 +877,8 @@ let eq_constr_univs_test sigma1 sigma2 t u =
   in
   let ans =
     UnivProblem.eq_constr_univs_infer_with
-      (fun t -> kind_of_term_upto sigma1 t)
-      (fun u -> kind_of_term_upto sigma2 u)
-      (universes sigma2) fold t u sigma2
+      (fun t -> kind_of_term_upto evd t)
+      (fun u -> kind_of_term_upto extended_evd u)
+      (universes extended_evd) fold t u extended_evd
   in
   match ans with None -> false | Some _ -> true

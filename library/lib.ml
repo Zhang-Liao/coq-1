@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -13,7 +13,6 @@ open CErrors
 open Util
 open Names
 open Libnames
-open Globnames
 open Libobject
 open Context.Named.Declaration
 
@@ -28,7 +27,7 @@ let make_oname Nametab.{ obj_dir; obj_mp } id =
 
 (* let make_oname (dirpath,(mp,dir)) id = *)
 type node =
-  | Leaf of obj
+  | Leaf of Libobject.t
   | CompilingLibrary of Nametab.object_prefix
   | OpenedModule of is_type * export * Nametab.object_prefix * Summary.frozen
   | OpenedSection of Nametab.object_prefix * Summary.frozen
@@ -37,7 +36,8 @@ type library_entry = object_name * node
 
 type library_segment = library_entry list
 
-type lib_objects =  (Names.Id.t * obj) list
+type lib_atomic_objects = (Id.t * Libobject.obj) list
+type lib_objects =  (Names.Id.t * Libobject.t) list
 
 let module_kind is_type =
   if is_type then "module type" else "module"
@@ -45,10 +45,10 @@ let module_kind is_type =
 let iter_objects f i prefix =
   List.iter (fun (id,obj) -> f i (make_oname prefix id, obj))
 
-let load_objects i pr = iter_objects load_object i pr
-let open_objects i pr = iter_objects open_object i pr
+let load_atomic_objects i pr = iter_objects load_object i pr
+let open_atomic_objects i pr = iter_objects open_object i pr
 
-let subst_objects subst seg = 
+let subst_atomic_objects subst seg =
   let subst_one = fun (id,obj as node) ->
     let obj' = subst_object (subst,obj) in
       if obj' == obj then node else
@@ -67,15 +67,25 @@ let classify_segment seg =
   let rec clean ((substl,keepl,anticipl) as acc) = function
     | (_,CompilingLibrary _) :: _ | [] -> acc
     | ((sp,kn),Leaf o) :: stk ->
-	let id = Names.Label.to_id (Names.KerName.label kn) in
-	  (match classify_object o with
-	     | Dispose -> clean acc stk
-	     | Keep o' ->
-		 clean (substl, (id,o')::keepl, anticipl) stk
-	     | Substitute o' ->
-		 clean ((id,o')::substl, keepl, anticipl) stk
-	     | Anticipate o' ->
-		 clean (substl, keepl, o'::anticipl) stk)
+          let id = Names.Label.to_id (Names.KerName.label kn) in
+    begin match o with
+    | ModuleObject _ | ModuleTypeObject _ | IncludeObject _ ->
+      clean ((id,o)::substl, keepl, anticipl) stk
+    | KeepObject _ ->
+      clean (substl, (id,o)::keepl, anticipl) stk
+    | ExportObject _ ->
+      clean ((id,o)::substl, keepl, anticipl) stk
+    | AtomicObject obj ->
+      begin match classify_object obj with
+        | Dispose -> clean acc stk
+        | Keep o' ->
+          clean (substl, (id,AtomicObject o')::keepl, anticipl) stk
+        | Substitute o' ->
+          clean ((id,AtomicObject o')::substl, keepl, anticipl) stk
+        | Anticipate o' ->
+          clean (substl, keepl, AtomicObject o'::anticipl) stk
+      end
+    end
     | (_,OpenedSection _) :: _ -> user_err Pp.(str "there are still opened sections")
     | (_,OpenedModule (ty,_,_,_)) :: _ ->
       user_err ~hdr:"Lib.classify_segment"
@@ -223,19 +233,19 @@ let add_leaf id obj =
     user_err Pp.(str "No session module started (use -top dir)");
   let oname = make_foname id in
   cache_object (oname,obj);
-  add_entry oname (Leaf obj);
+  add_entry oname (Leaf (AtomicObject obj));
   oname
 
 let add_discharged_leaf id obj =
   let oname = make_foname id in
   let newobj = rebuild_object obj in
   cache_object (oname,newobj);
-  add_entry oname (Leaf newobj)
+  add_entry oname (Leaf (AtomicObject newobj))
 
 let add_leaves id objs =
   let oname = make_foname id in
   let add_obj obj =
-    add_entry oname (Leaf obj);
+    add_entry oname (Leaf (AtomicObject obj));
     load_object 1 (oname,obj)
   in
   List.iter add_obj objs;
@@ -246,9 +256,9 @@ let add_anonymous_leaf ?(cache_first = true) obj =
   let oname = make_foname id in
   if cache_first then begin
     cache_object (oname,obj);
-    add_entry oname (Leaf obj)
+    add_entry oname (Leaf (AtomicObject obj))
   end else begin
-    add_entry oname (Leaf obj);
+    add_entry oname (Leaf (AtomicObject obj));
     cache_object (oname,obj)
   end
 
@@ -400,79 +410,97 @@ let find_opening_node id =
    - the list of substitution to do at section closing
 *)
 
-type variable_info = Constr.named_declaration * Decl_kinds.binding_kind
-
-type variable_context = variable_info list
 type abstr_info = {
-  abstr_ctx : variable_context;
+  abstr_ctx : Constr.named_context;
   abstr_subst : Univ.Instance.t;
   abstr_uctx : Univ.AUContext.t;
 }
 type abstr_list = abstr_info Names.Cmap.t * abstr_info Names.Mindmap.t
 
 type secentry =
-  | Variable of (Names.Id.t * Decl_kinds.binding_kind *
-		   Decl_kinds.polymorphic * Univ.ContextSet.t)
+  | Variable of {
+      id:Names.Id.t;
+    }
   | Context of Univ.ContextSet.t
 
+type section_data = {
+  sec_entry : secentry list;
+  sec_abstr : abstr_list;
+  sec_poly  : bool;
+}
+
+let empty_section_data ~poly = {
+  sec_entry = [];
+  sec_abstr = (Names.Cmap.empty,Names.Mindmap.empty);
+  sec_poly  = poly;
+}
+
 let sectab =
-  Summary.ref ([] : (secentry list * Opaqueproof.work_list * abstr_list) list)
-    ~name:"section-context"
+  Summary.ref ([] : section_data list) ~name:"section-context"
 
-let add_section () =
-  sectab := ([],(Names.Cmap.empty,Names.Mindmap.empty),
-                (Names.Cmap.empty,Names.Mindmap.empty)) :: !sectab
-
-let check_same_poly p vars =
-  let pred = function Context _ -> p = false | Variable (_, _, poly, _) -> p != poly in
-  if List.exists pred vars then
+let check_same_poly p sec =
+  if p != sec.sec_poly then
     user_err Pp.(str  "Cannot mix universe polymorphic and monomorphic declarations in sections.")
 
-let add_section_variable id impl poly ctx =
+let add_section ~poly () =
+  List.iter (fun tab -> check_same_poly poly tab) !sectab;
+  sectab := empty_section_data ~poly :: !sectab
+
+let add_section_variable ~name ~poly =
   match !sectab with
     | [] -> () (* because (Co-)Fixpoint temporarily uses local vars *)
-    | (vars,repl,abs)::sl ->
-       List.iter (fun tab -> check_same_poly poly (pi1 tab)) !sectab;
-       sectab := (Variable (id,impl,poly,ctx)::vars,repl,abs)::sl
+    | s :: sl ->
+       List.iter (fun tab -> check_same_poly poly tab) !sectab;
+       let s = { s with sec_entry = Variable {id=name} :: s.sec_entry } in
+       sectab := s :: sl
 
 let add_section_context ctx =
   match !sectab with
     | [] -> () (* because (Co-)Fixpoint temporarily uses local vars *)
-    | (vars,repl,abs)::sl ->
-       check_same_poly true vars;
-       sectab := (Context ctx :: vars,repl,abs)::sl
+    | s :: sl ->
+       check_same_poly true s;
+       let s = { s with sec_entry = Context ctx :: s.sec_entry } in
+       sectab := s :: sl
 
-exception PolyFound of bool (* make this a let exception once possible *)
+exception PolyFound (* make this a let exception once possible *)
 let is_polymorphic_univ u =
   try
     let open Univ in
-    List.iter (fun (vars,_,_) ->
+    List.iter (fun s ->
+      let vars = s.sec_entry in
         List.iter (function
-            | Variable (_,_,poly,(univs,_)) ->
-              if LSet.mem u univs then raise (PolyFound poly)
+            | Variable _ -> ()
             | Context (univs,_) ->
-              if LSet.mem u univs then raise (PolyFound true)
+              if LSet.mem u univs then raise PolyFound
           ) vars
       ) !sectab;
     false
-  with PolyFound b -> b
+  with PolyFound -> true
 
-let extract_hyps (secs,ohyps) =
+let extract_hyps poly (secs,ohyps) =
   let rec aux = function
-    | (Variable (id,impl,poly,ctx)::idl, decl::hyps) when Names.Id.equal id (NamedDecl.get_id decl) ->
+    | (Variable {id}::idl, decl::hyps) when Names.Id.equal id (NamedDecl.get_id decl) ->
       let l, r = aux (idl,hyps) in 
-      (decl,impl) :: l, if poly then Univ.ContextSet.union r ctx else r
-    | (Variable (_,_,poly,ctx)::idl,hyps) ->
+      decl :: l, r
+    | (Variable _::idl,hyps) ->
         let l, r = aux (idl,hyps) in
-          l, if poly then Univ.ContextSet.union r ctx else r
+          l, r
     | (Context ctx :: idl, hyps) ->
+      let () = assert poly in
        let l, r = aux (idl, hyps) in
        l, Univ.ContextSet.union r ctx
     | [], _ -> [],Univ.ContextSet.empty
   in aux (secs,ohyps)
 
 let instance_from_variable_context =
-  List.map fst %> List.filter is_local_assum %> List.map NamedDecl.get_id %> Array.of_list
+  List.rev %> List.filter is_local_assum %> List.map NamedDecl.get_id %> Array.of_list
+
+let extract_worklist info =
+  let args = instance_from_variable_context info.abstr_ctx in
+  info.abstr_subst, args
+
+let make_worklist (cmap, mmap) =
+  Cmap.map extract_worklist cmap, Mindmap.map extract_worklist mmap
 
 let name_instance inst =
   (* FIXME: this should probably be done at an upper level, by storing the
@@ -491,39 +519,40 @@ let name_instance inst =
   in
   Array.map map (Univ.Instance.to_array inst)
 
-let add_section_replacement f g poly hyps =
+let add_section_replacement g poly hyps =
   match !sectab with
   | [] -> ()
-  | (vars,exps,abs)::sl ->
-    let () = check_same_poly poly vars in
-    let sechyps,ctx = extract_hyps (vars,hyps) in
+  | s :: sl ->
+    let () = check_same_poly poly s in
+    let sechyps,ctx = extract_hyps s.sec_poly (s.sec_entry, hyps) in
     let ctx = Univ.ContextSet.to_context ctx in
-    let inst = Univ.UContext.instance ctx in
-    let nas = name_instance inst in
+    let nas = name_instance (Univ.UContext.instance ctx) in
     let subst, ctx = Univ.abstract_universes nas ctx in
-    let args = instance_from_variable_context (List.rev sechyps) in
     let info = {
       abstr_ctx = sechyps;
       abstr_subst = subst;
       abstr_uctx = ctx;
     } in
-    sectab := (vars,f (inst,args) exps, g info abs) :: sl
+    let s = { s with
+      sec_abstr = g info s.sec_abstr;
+    } in
+    sectab := s :: sl
 
-let add_section_kn poly kn =
+let add_section_kn ~poly kn =
   let f x (l1,l2) = (l1,Names.Mindmap.add kn x l2) in
-    add_section_replacement f f poly
+    add_section_replacement f poly
 
-let add_section_constant poly kn =
+let add_section_constant ~poly kn =
   let f x (l1,l2) = (Names.Cmap.add kn x l1,l2) in
-    add_section_replacement f f poly
+    add_section_replacement f poly
 
-let replacement_context () = pi2 (List.hd !sectab)
+let replacement_context () = make_worklist (List.hd !sectab).sec_abstr
 
 let section_segment_of_constant con =
-  Names.Cmap.find con (fst (pi3 (List.hd !sectab)))
+  Names.Cmap.find con (fst (List.hd !sectab).sec_abstr)
 
 let section_segment_of_mutual_inductive kn =
-  Names.Mindmap.find kn (snd (pi3 (List.hd !sectab)))
+  Names.Mindmap.find kn (snd (List.hd !sectab).sec_abstr)
 
 let empty_segment = {
   abstr_ctx = [];
@@ -531,7 +560,7 @@ let empty_segment = {
   abstr_uctx = Univ.AUContext.empty;
 }
 
-let section_segment_of_reference = function
+let section_segment_of_reference = let open GlobRef in function
 | ConstRef c -> section_segment_of_constant c
 | IndRef (kn,_) | ConstructRef ((kn,_),_) ->
   section_segment_of_mutual_inductive kn
@@ -540,26 +569,28 @@ let section_segment_of_reference = function
 let variable_section_segment_of_reference gr =
   (section_segment_of_reference gr).abstr_ctx
 
-let section_instance = function
+let section_instance = let open GlobRef in function
   | VarRef id ->
      let eq = function
-       | Variable (id',_,_,_) -> Names.Id.equal id id'
+       | Variable {id=id'} -> Names.Id.equal id id'
        | Context _ -> false
      in
-     if List.exists eq (pi1 (List.hd !sectab))
+     if List.exists eq (List.hd !sectab).sec_entry
      then Univ.Instance.empty, [||]
      else raise Not_found
   | ConstRef con ->
-      Names.Cmap.find con (fst (pi2 (List.hd !sectab)))
+    let data = Names.Cmap.find con (fst (List.hd !sectab).sec_abstr) in
+    extract_worklist data
   | IndRef (kn,_) | ConstructRef ((kn,_),_) ->
-      Names.Mindmap.find kn (snd (pi2 (List.hd !sectab)))
+    let data = Names.Mindmap.find kn (snd (List.hd !sectab).sec_abstr) in
+    extract_worklist data
 
 let is_in_section ref =
   try ignore (section_instance ref); true with Not_found -> false
 
 (*************)
 (* Sections. *)
-let open_section id =
+let open_section ~poly id =
   let opp = !lib_state.path_prefix in
   let obj_dir = add_dirpath_suffix opp.Nametab.obj_dir id in
   let prefix = Nametab.{ obj_dir; obj_mp = opp.obj_mp; obj_sec = add_dirpath_suffix opp.obj_sec id } in
@@ -570,7 +601,7 @@ let open_section id =
   (*Pushed for the lifetime of the section: removed by unfrozing the summary*)
   Nametab.(push_dir (Until 1) obj_dir (GlobDirRef.DirOpenSection prefix));
   lib_state := { !lib_state with path_prefix = prefix };
-  add_section ()
+  add_section ~poly ()
 
 
 (* Restore lib_stk and summaries as before the section opening, and
@@ -579,7 +610,12 @@ let open_section id =
 let discharge_item ((sp,_ as oname),e) =
   match e with
   | Leaf lobj ->
-      Option.map (fun o -> (basename sp,o)) (discharge_object (oname,lobj))
+    begin match lobj with
+    | ModuleObject _ | ModuleTypeObject _ | IncludeObject _ | KeepObject _
+    | ExportObject _ -> None
+    | AtomicObject obj ->
+      Option.map (fun o -> (basename sp,o)) (discharge_object (oname,obj))
+    end
   | OpenedSection _ | OpenedModule _ | CompilingLibrary _ ->
       anomaly (Pp.str "discharge_item.")
 
@@ -624,7 +660,7 @@ let init () =
 
 (* Misc *)
 
-let mp_of_global = function
+let mp_of_global = let open GlobRef in function
   | VarRef id -> !lib_state.path_prefix.Nametab.obj_mp
   | ConstRef cst -> Names.Constant.modpath cst
   | IndRef ind -> Names.ind_modpath ind
@@ -643,12 +679,12 @@ let rec split_modpath = function
     (dp, Names.Label.to_id l :: ids)
 
 let library_part = function
-  |VarRef id -> library_dp ()
-  |ref -> dp_of_mp (mp_of_global ref)
+  | GlobRef.VarRef id -> library_dp ()
+  | ref -> dp_of_mp (mp_of_global ref)
 
 let discharge_proj_repr =
   Projection.Repr.map_npars (fun mind npars ->
-      if not (is_in_section (IndRef (mind,0))) then mind, npars
+      if not (is_in_section (GlobRef.IndRef (mind,0))) then mind, npars
       else let modlist = replacement_context () in
       let _, newpars = Mindmap.find mind (snd modlist) in
       mind, npars + Array.length newpars)

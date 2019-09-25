@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -20,7 +20,7 @@ open Impargs
 open Constrexpr
 open Constrexpr_ops
 open Extend
-open Decl_kinds
+open Decls
 open Declaremods
 open Declarations
 open Namegen
@@ -72,16 +72,29 @@ let parse_compat_version = let open Flags in function
     CErrors.user_err ~hdr:"get_compat_version"
       Pp.(str "Unknown compatibility version \"" ++ str s ++ str "\".")
 
+(* For now we just keep the top-level location of the whole
+   vernacular, that is to say, including attributes and control flags;
+   this is not very convenient for advanced clients tho, so in the
+   future it'd be cool to actually locate the attributes and control
+   flags individually too. *)
+let add_control_flag ~loc ~flag { CAst.v = cmd } =
+  CAst.make ~loc { cmd with control = flag :: cmd.control }
+
 }
 
 GRAMMAR EXTEND Gram
   GLOBAL: vernac_control quoted_attributes gallina_ext noedit_mode subprf;
   vernac_control: FIRST
-    [ [ IDENT "Time"; c = vernac_control -> { CAst.make ~loc @@ VernacTime (false,c) }
-      | IDENT "Redirect"; s = ne_string; c = vernac_control -> { CAst.make ~loc @@ VernacRedirect (s, c) }
-      | IDENT "Timeout"; n = natural; v = vernac_control -> { CAst.make ~loc @@ VernacTimeout(n,v) }
-      | IDENT "Fail"; v = vernac_control -> { CAst.make ~loc @@ VernacFail v }
-      | v = decorated_vernac -> { let (f, v) = v in CAst.make ~loc @@ VernacExpr(f, v) } ]
+    [ [ IDENT "Time"; c = vernac_control ->
+        { add_control_flag ~loc ~flag:(ControlTime false) c }
+      | IDENT "Redirect"; s = ne_string; c = vernac_control ->
+        { add_control_flag ~loc ~flag:(ControlRedirect s) c }
+      | IDENT "Timeout"; n = natural; c = vernac_control ->
+        { add_control_flag ~loc ~flag:(ControlTimeout n) c }
+      | IDENT "Fail"; c = vernac_control ->
+        { add_control_flag ~loc ~flag:ControlFail c }
+      | v = decorated_vernac ->
+        { let (attrs, expr) = v in CAst.make ~loc { control = []; attrs; expr = expr } } ]
     ]
   ;
   decorated_vernac:
@@ -295,8 +308,8 @@ GRAMMAR EXTEND Gram
       | -> { NoInline } ] ]
   ;
   univ_constraint:
-    [ [ l = universe_level; ord = [ "<" -> { Univ.Lt } | "=" -> { Univ.Eq } | "<=" -> { Univ.Le } ];
-	r = universe_level -> { (l, ord, r) } ] ]
+    [ [ l = universe_name; ord = [ "<" -> { Univ.Lt } | "=" -> { Univ.Eq } | "<=" -> { Univ.Le } ];
+        r = universe_name -> { (l, ord, r) } ] ]
   ;
   univ_decl :
     [ [  "@{" ; l = LIST0 identref; ext = [ "+" -> { true } | -> { false } ];
@@ -402,16 +415,19 @@ GRAMMAR EXTEND Gram
   ;
   (* (co)-fixpoints *)
   rec_definition:
-    [ [ id = ident_decl;
+    [ [ id_decl = ident_decl;
 	bl = binders_fixannot;
-        ty = type_cstr;
-	def = OPT [":="; def = lconstr -> { def } ]; ntn = decl_notation ->
-	  { let bl, annot = bl in ((id,annot,bl,ty,def),ntn) } ] ]
+        rtype = type_cstr;
+        body_def = OPT [":="; def = lconstr -> { def } ]; notations = decl_notation ->
+          { let binders, rec_order = bl in
+            {fname = fst id_decl; univs = snd id_decl; rec_order; binders; rtype; body_def; notations}
+          } ] ]
   ;
   corec_definition:
-    [ [ id = ident_decl; bl = binders; ty = type_cstr;
-        def = OPT [":="; def = lconstr -> { def }]; ntn = decl_notation ->
-          { ((id,bl,ty,def),ntn) } ] ]
+    [ [ id_decl = ident_decl; binders = binders; rtype = type_cstr;
+        body_def = OPT [":="; def = lconstr -> { def }]; notations = decl_notation ->
+        { {fname = fst id_decl; univs = snd id_decl; rec_order = (); binders; rtype; body_def; notations}
+        } ]]
   ;
   type_cstr:
     [ [ ":"; c=lconstr -> { c }
@@ -516,7 +532,7 @@ END
 
 let only_starredidentrefs =
   Pcoq.Entry.of_parser "test_only_starredidentrefs"
-    (fun strm ->
+    (fun _ strm ->
       let rec aux n =
       match Util.stream_nth n strm with
         | KEYWORD "." -> ()
@@ -1032,6 +1048,7 @@ GRAMMAR EXTEND Gram
       | IDENT "Coercion"; IDENT "Paths"; s = class_rawexpr; t = class_rawexpr
          -> { PrintCoercionPaths (s,t) }
       | IDENT "Canonical"; IDENT "Projections" -> { PrintCanonicalConversions }
+      | IDENT "Typing"; IDENT "Flags" -> { PrintTypingFlags }
       | IDENT "Tables" -> { PrintTables }
       | IDENT "Options" -> { PrintTables (* A Synonymous to Tables *) }
       | IDENT "Hint" -> { PrintHintGoal }
@@ -1138,7 +1155,6 @@ GRAMMAR EXTEND Gram
       | IDENT "Reset"; id = identref -> { VernacResetName id }
       | IDENT "Back" -> { VernacBack 1 }
       | IDENT "Back"; n = natural -> { VernacBack n }
-      | IDENT "BackTo"; n = natural -> { VernacBackTo n }
 
 (* Tactic Debugger *)
       |	IDENT "Debug"; IDENT "On" ->

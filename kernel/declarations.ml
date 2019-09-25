@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -66,6 +66,10 @@ type typing_flags = {
   (** If [false] then fixed points and co-fixed points are assumed to
       be total. *)
 
+  check_positive : bool;
+  (** If [false] then inductive types are assumed positive and co-inductive
+      types are assumed productive. *)
+
   check_universes : bool;
   (** If [false] universe constraints are not checked *)
 
@@ -83,6 +87,11 @@ type typing_flags = {
 
   indices_matter: bool;
   (** The universe of an inductive type must be above that of its indices. *)
+
+  check_template : bool;
+  (* If [false] then we don't check that the universes template-polymorphic
+     inductive parameterize on are necessarily local and unbounded from below.
+     This potentially introduces inconsistencies. *)
 }
 
 (* some contraints are in constant_constraints, some other may be in
@@ -94,7 +103,6 @@ type 'opaque constant_body = {
     const_relevance : Sorts.relevance;
     const_body_code : Cemitcodes.to_patch_substituted option;
     const_universes : universes;
-    const_private_poly_univs : Univ.ContextSet.t option;
     const_inline_code : bool;
     const_typing_flags : typing_flags; (** The typing options which
                                            were used for

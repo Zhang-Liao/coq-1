@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -32,7 +32,6 @@ Variable phiCR_comm: forall (c:C)(x:R), x * [c] == [c] * x.
    with coefficients in C :
  *)
 
-#[universes(template)]
  Inductive Pol : Type :=
   | Pc : C -> Pol
   | PX : Pol -> positive -> positive -> Pol -> Pol. 

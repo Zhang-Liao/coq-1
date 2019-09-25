@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -356,6 +356,9 @@ module ModPath = struct
 
 end
 
+module DPset = Set.Make(DirPath)
+module DPmap = Map.Make(DirPath)
+
 module MPset = Set.Make(ModPath)
 module MPmap = CMap.Make(ModPath)
 
@@ -671,6 +674,7 @@ module InductiveOrdered_env = struct
   let compare = ind_user_ord
 end
 
+module Indset = Set.Make(InductiveOrdered)
 module Indmap = Map.Make(InductiveOrdered)
 module Indmap_env = Map.Make(InductiveOrdered_env)
 

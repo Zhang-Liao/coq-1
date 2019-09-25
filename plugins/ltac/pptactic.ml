@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -20,7 +20,6 @@ open Stdarg
 open Notation_gram
 open Tactypes
 open Locus
-open Decl_kinds
 open Genredexpr
 open Ppconstr
 open Pputils
@@ -194,7 +193,7 @@ let string_of_genarg_arg (ArgumentType arg) =
 
   let pr_evaluable_reference = function
     | EvalVarRef id -> pr_id id
-    | EvalConstRef sp -> pr_global (Globnames.ConstRef sp)
+    | EvalConstRef sp -> pr_global (GlobRef.ConstRef sp)
 
   let pr_quantified_hypothesis = function
     | AnonHyp n -> int n
@@ -385,7 +384,7 @@ let string_of_genarg_arg (ArgumentType arg) =
   let pr_evaluable_reference_env env = function
     | EvalVarRef id -> pr_id id
     | EvalConstRef sp ->
-      Nametab.pr_global_env (Termops.vars_of_env env) (Globnames.ConstRef sp)
+      Nametab.pr_global_env (Termops.vars_of_env env) (GlobRef.ConstRef sp)
 
   let pr_as_disjunctive_ipat prc ipatl =
     keyword "as" ++ spc () ++
@@ -1097,7 +1096,7 @@ let pr_goal_selector ~toplevel s =
     let rec strip_ty acc n ty =
       if Int.equal n 0 then (List.rev acc, (ty,None)) else
         match DAst.get ty with
-            Glob_term.GProd(na,Explicit,a,b) ->
+            Glob_term.GProd(na,Glob_term.Explicit,a,b) ->
               strip_ty (([CAst.make na],(a,None))::acc) (n-1) b
           | _ -> user_err Pp.(str "Cannot translate fix tactic: not enough products") in
     strip_ty [] n ty
@@ -1314,6 +1313,12 @@ let pr_glob_constr_pptac env sigma c =
 let pr_lglob_constr_pptac env sigma c =
   pr_lglob_constr_env env c
 
+let pr_raw_intro_pattern =
+  lift_env (fun env sigma -> Miscprint.pr_intro_pattern @@ pr_constr_expr env sigma)
+
+let pr_glob_intro_pattern =
+  lift_env (fun env sigma -> Miscprint.pr_intro_pattern (fun (c,_) -> pr_glob_constr_pptac env sigma c))
+
 let () =
   let pr_bool b = if b then str "true" else str "false" in
   let pr_unit _ = str "()" in
@@ -1323,11 +1328,8 @@ let () =
     pr_qualid (pr_or_var (pr_located pr_global)) pr_global;
   register_basic_print0 wit_ident pr_id pr_id pr_id;
   register_basic_print0 wit_var pr_lident pr_lident pr_id;
-  register_print0
-    wit_intro_pattern
-    (lift_env (fun env sigma -> Miscprint.pr_intro_pattern @@ pr_constr_expr env sigma))
-    (lift_env (fun env sigma -> Miscprint.pr_intro_pattern (fun (c,_) -> pr_glob_constr_pptac env sigma c)))
-    pr_intro_pattern_env;
+  register_print0 wit_intropattern pr_raw_intro_pattern pr_glob_intro_pattern pr_intro_pattern_env [@warning "-3"];
+  register_print0 wit_simple_intropattern pr_raw_intro_pattern pr_glob_intro_pattern pr_intro_pattern_env;
   Genprint.register_print0
     wit_clause_dft_concl
     (lift (pr_clauses (Some true) pr_lident))

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -55,7 +55,7 @@ GRAMMAR EXTEND Gram
   ;
   command:
     [ [ IDENT "Goal"; c = lconstr ->
-        { VernacDefinition (Decl_kinds.(NoDischarge, Definition), ((CAst.make ~loc Names.Anonymous), None), ProveBody ([], c)) }
+        { VernacDefinition (Decls.(NoDischarge, Definition), ((CAst.make ~loc Names.Anonymous), None), ProveBody ([], c)) }
       | IDENT "Proof" -> { VernacProof (None,None) }
       | IDENT "Proof" ; IDENT "Mode" ; mn = string -> { VernacProofMode mn }
       | IDENT "Proof"; c = lconstr -> { VernacExactProof c }

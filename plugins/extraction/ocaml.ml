@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,6 @@ open CErrors
 open Util
 open Names
 open ModPath
-open Globnames
 open Table
 open Miniml
 open Mlutil
@@ -142,7 +141,7 @@ let get_infix r =
   let s = find_custom r in
   String.sub s 1 (String.length s - 2)
 
-let get_ind = function
+let get_ind = let open GlobRef in function
   | IndRef _ as r -> r
   | ConstructRef (ind,_) -> IndRef ind
   | _ -> assert false
@@ -166,7 +165,7 @@ let pp_type par vl t =
     | Tglob (r,[a1;a2]) when is_infix r ->
 	pp_par par (pp_rec true a1 ++ str (get_infix r) ++ pp_rec true a2)
     | Tglob (r,[]) -> pp_global Type r
-    | Tglob (IndRef(kn,0),l)
+    | Tglob (GlobRef.IndRef(kn,0),l)
 	when not (keep_singleton ()) && MutInd.equal kn (mk_ind "Coq.Init.Specif" "sig") ->
 	pp_tuple_light pp_rec l
     | Tglob (r,l) ->
@@ -230,12 +229,7 @@ let rec pp_expr par env args =
 	and pp_a1 = pp_expr false env [] a1
 	and pp_a2 = pp_expr (not par && expr_needs_par a2) env' [] a2 in
 	hv 0 (apply2 (pp_letin pp_id pp_a1 pp_a2))
-    | MLglob r ->
-	(try
-	   let args = List.skipn (projection_arity r) args in
-	   let record = List.hd args in
-	   pp_apply (record ++ str "." ++ pp_global Term r) par (List.tl args)
-	 with e when CErrors.noncritical e -> apply (pp_global Term r))
+    | MLglob r -> apply (pp_global Term r)
     | MLfix (i,ids,defs) ->
 	let ids',env' = push_vars (List.rev (Array.to_list ids)) env in
 	pp_fix par env' i (Array.of_list (List.rev ids'),defs) args
@@ -325,9 +319,13 @@ and pp_record_proj par env typ t pv args =
   let n = List.length ids in
   let no_patvar a = not (List.exists (ast_occurs_itvl 1 n) a) in
   let rel_i,a = match body with
-    | MLrel i when i <= n -> i,[]
-    | MLapp(MLrel i, a) when i<=n && no_patvar a -> i,a
+    | MLrel i | MLmagic(MLrel i) when i <= n -> i,[]
+    | MLapp(MLrel i, a) | MLmagic(MLapp(MLrel i, a))
+      | MLapp(MLmagic(MLrel i), a) when i<=n && no_patvar a -> i,a
     | _ -> raise Impossible
+  in
+  let magic =
+    match body with MLmagic _ | MLapp(MLmagic _, _) -> true | _ -> false
   in
   let rec lookup_rel i idx = function
     | Prel j :: l -> if Int.equal i j then idx else lookup_rel i (idx+1) l
@@ -344,7 +342,10 @@ and pp_record_proj par env typ t pv args =
   let pp_args = (List.map (pp_expr true env' []) a) @ args in
   let pp_head = pp_expr true env [] t ++ str "." ++ pp_field r fields idx
   in
-  pp_apply pp_head par pp_args
+  if magic then
+    pp_apply (str "Obj.magic") par (pp_head :: pp_args)
+  else
+    pp_apply pp_head par pp_args
 
 and pp_record_pat (fields, args) =
    str "{ " ++
@@ -467,7 +468,7 @@ let pp_Dfix (rv,c,t) =
 let pp_equiv param_list name = function
   | NoEquiv, _ -> mt ()
   | Equiv kn, i ->
-      str " = " ++ pp_parameters param_list ++ pp_global Type (IndRef (MutInd.make1 kn,i))
+      str " = " ++ pp_parameters param_list ++ pp_global Type (GlobRef.IndRef (MutInd.make1 kn,i))
   | RenEquiv ren, _  ->
       str " = " ++ pp_parameters param_list ++ str (ren^".") ++ name
 
@@ -494,7 +495,7 @@ let pp_logical_ind packet =
   fnl ()
 
 let pp_singleton kn packet =
-  let name = pp_global Type (IndRef (kn,0)) in
+  let name = pp_global Type (GlobRef.IndRef (kn,0)) in
   let l = rename_tvars keywords packet.ip_vars in
   hov 2 (str "type " ++ pp_parameters l ++ name ++ str " =" ++ spc () ++
 	 pp_type false l (List.hd packet.ip_types.(0)) ++ fnl () ++
@@ -502,7 +503,7 @@ let pp_singleton kn packet =
 		     Id.print packet.ip_consnames.(0)))
 
 let pp_record kn fields ip_equiv packet =
-  let ind = IndRef (kn,0) in
+  let ind = GlobRef.IndRef (kn,0) in
   let name = pp_global Type ind in
   let fieldnames = pp_fields ind fields in
   let l = List.combine fieldnames packet.ip_types.(0) in
@@ -525,13 +526,13 @@ let pp_ind co kn ind =
   let nextkwd = fnl () ++ str "and " in
   let names =
     Array.mapi (fun i p -> if p.ip_logical then mt () else
-		  pp_global Type (IndRef (kn,i)))
+                  pp_global Type (GlobRef.IndRef (kn,i)))
       ind.ind_packets
   in
   let cnames =
     Array.mapi
       (fun i p -> if p.ip_logical then [||] else
-	 Array.mapi (fun j _ -> pp_global Cons (ConstructRef ((kn,i),j+1)))
+         Array.mapi (fun j _ -> pp_global Cons (GlobRef.ConstructRef ((kn,i),j+1)))
 	   p.ip_types)
       ind.ind_packets
   in
@@ -541,7 +542,7 @@ let pp_ind co kn ind =
       let ip = (kn,i) in
       let ip_equiv = ind.ind_equiv, i in
       let p = ind.ind_packets.(i) in
-      if is_custom (IndRef ip) then pp (i+1) kwd
+      if is_custom (GlobRef.IndRef ip) then pp (i+1) kwd
       else if p.ip_logical then pp_logical_ind p ++ pp (i+1) kwd
       else
 	kwd ++ (if co then pp_coind p.ip_vars names.(i) else mt ()) ++
@@ -580,14 +581,10 @@ let pp_decl = function
     | Dterm (r, a, t) ->
 	let def =
 	  if is_custom r then str (" = " ^ find_custom r)
-	  else if is_projection r then
-	    (prvect str (Array.make (projection_arity r) " _")) ++
-	    str " x = x."
 	  else pp_function (empty_env ()) a
 	in
 	let name = pp_global Term r in
-	let postdef = if is_projection r then name else mt () in
-	pp_val name t ++ hov 0 (str "let " ++ name ++ def ++ postdef)
+        pp_val name t ++ hov 0 (str "let " ++ name ++ def ++ mt ())
     | Dfix (rv,defs,typs) ->
 	pp_Dfix (rv,defs,typs)
 
@@ -672,7 +669,7 @@ and pp_module_type params = function
       let mp_w =
 	List.fold_left (fun mp l -> MPdot(mp,Label.of_id l)) mp_mt idl'
       in
-      let r = ConstRef (Constant.make2 mp_w (Label.of_id l)) in
+      let r = GlobRef.ConstRef (Constant.make2 mp_w (Label.of_id l)) in
       push_visible mp_mt [];
       let pp_w = str " with type " ++ ids ++ pp_global Type r in
       pop_visible();

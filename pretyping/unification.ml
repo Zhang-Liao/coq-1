@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -254,6 +254,10 @@ let unify_r2l x = x
 let sort_eqns = unify_r2l
 *)
 
+type allowed_evars =
+| AllowAll
+| AllowFun of (Evar.t -> bool)
+
 type core_unify_flags = {
   modulo_conv_on_closed_terms : TransparentState.t option;
     (* What this flag controls was activated with all constants transparent, *)
@@ -287,8 +291,8 @@ type core_unify_flags = {
     (* This allowed for instance to unify "forall x:?A, ?B x" with "A' -> B'" *)
     (* when ?B is a Meta. *)
 
-  frozen_evars : Evar.Set.t;
-    (* Evars of this set are considered axioms and never instantiated *)
+  allowed_evars : allowed_evars;
+    (* Evars that are allowed to be instantiated *)
     (* Useful e.g. for autorewrite *)
 
   restrict_conv_on_strict_subterms : bool;
@@ -339,7 +343,7 @@ let default_core_unify_flags () =
   check_applied_meta_types = true;
   use_pattern_unification = true;
   use_meta_bound_pattern_unification = true;
-  frozen_evars = Evar.Set.empty;
+  allowed_evars = AllowAll;
   restrict_conv_on_strict_subterms = false;
   modulo_betaiota = true;
   modulo_eta = true;
@@ -417,6 +421,10 @@ let default_no_delta_unify_flags ts =
   resolve_evars = false
 }
 
+let allow_new_evars sigma =
+  let undefined = Evd.undefined_map sigma in
+  AllowFun (fun evk -> not (Evar.Map.mem evk undefined))
+
 (* Default flags for looking for subterms in elimination tactics *)
 (* Not used in practice at the current date, to the exception of *)
 (* allow_K) because only closed terms are involved in *)
@@ -424,9 +432,7 @@ let default_no_delta_unify_flags ts =
 (* call w_unify for induction/destruct/case/elim  (13/6/2011) *)
 let elim_core_flags sigma = { (default_core_unify_flags ()) with
   modulo_betaiota = false;
-  frozen_evars =
-    fold_undefined (fun evk _ evars -> Evar.Set.add evk evars)
-      sigma Evar.Set.empty;
+  allowed_evars = allow_new_evars sigma;
 }
 
 let elim_flags_evars sigma =
@@ -600,8 +606,12 @@ let do_reduce ts (env, nb) sigma c =
   Stack.zip sigma (whd_betaiota_deltazeta_for_iota_state
                   ts env sigma (c, Stack.empty))
 
+let is_evar_allowed flags evk = match flags.allowed_evars with
+| AllowAll -> true
+| AllowFun f -> f evk
+
 let isAllowedEvar sigma flags c = match EConstr.kind sigma c with
-  | Evar (evk,_) -> not (Evar.Set.mem evk flags.frozen_evars)
+  | Evar (evk,_) -> is_evar_allowed flags evk
   | _ -> false
 
 
@@ -749,7 +759,7 @@ let rec unify_0_with_initial_metas (sigma,ms,es as subst : subst0) conv_at_top e
               evarsubst)
 	    else error_cannot_unify_local curenv sigma (m,n,cM)
 	| Evar (evk,_ as ev), Evar (evk',_)
-            when not (Evar.Set.mem evk flags.frozen_evars)
+            when is_evar_allowed flags evk
               && Evar.equal evk evk' ->
             begin match constr_cmp cv_pb env sigma flags cM cN with
             | Some sigma ->
@@ -758,14 +768,14 @@ let rec unify_0_with_initial_metas (sigma,ms,es as subst : subst0) conv_at_top e
 	      sigma,metasubst,((curenv,ev,cN)::evarsubst)
             end
 	| Evar (evk,_ as ev), _
-            when not (Evar.Set.mem evk flags.frozen_evars) 
+            when is_evar_allowed flags evk
 	      && not (occur_evar sigma evk cN) ->
 	    let cmvars = free_rels sigma cM and cnvars = free_rels sigma cN in
 	      if Int.Set.subset cnvars cmvars then
 		sigma,metasubst,((curenv,ev,cN)::evarsubst)
 	      else error_cannot_unify_local curenv sigma (m,n,cN)
 	| _, Evar (evk,_ as ev)
-            when not (Evar.Set.mem evk flags.frozen_evars)
+            when is_evar_allowed flags evk
 	      && not (occur_evar sigma evk cM) ->
 	    let cmvars = free_rels sigma cM and cnvars = free_rels sigma cN in
 	      if Int.Set.subset cmvars cnvars then
@@ -839,8 +849,9 @@ let rec unify_0_with_initial_metas (sigma,ms,es as subst : subst0) conv_at_top e
 	       unify_app_pattern true curenvnb pb opt substn cM f1 l1 cN f2 l2
 	     | _ -> raise ex)
 
-	| Case (_,p1,c1,cl1), Case (_,p2,c2,cl2) ->
-            (try 
+        | Case (ci1,p1,c1,cl1), Case (ci2,p2,c2,cl2) ->
+            (try
+             if not (eq_ind ci1.ci_ind ci2.ci_ind) then error_cannot_unify curenv sigma (cM,cN);
 	     let opt' = {opt with at_top = true; with_types = false} in
 	       Array.fold_left2 (unirec_rec curenvnb CONV {opt with at_top = true})
 	       (unirec_rec curenvnb CONV opt'
@@ -1553,7 +1564,7 @@ let default_matching_core_flags sigma =
   check_applied_meta_types = true;
   use_pattern_unification = false;
   use_meta_bound_pattern_unification = false;
-  frozen_evars = Evar.Map.domain (Evd.undefined_map sigma);
+  allowed_evars = allow_new_evars sigma;
   restrict_conv_on_strict_subterms = false;
   modulo_betaiota = false;
   modulo_eta = false;

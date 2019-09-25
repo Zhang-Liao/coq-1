@@ -1,9 +1,11 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 Declare ML Module "ltac2_plugin".
@@ -51,7 +53,7 @@ Ltac2 Type err.
 Ltac2 Type exn ::= [ Internal (err) ].
 (** Wrapper around the errors raised by Coq implementation. *)
 
-Ltac2 Type exn ::= [ Out_of_bounds ].
+Ltac2 Type exn ::= [ Out_of_bounds (message option) ].
 (** Used for bound checking, e.g. with String and Array. *)
 
 Ltac2 Type exn ::= [ Not_focussed ].
@@ -63,8 +65,14 @@ Ltac2 Type exn ::= [ Not_focussed ].
 Ltac2 Type exn ::= [ Not_found ].
 (** Used when something is missing. *)
 
+Ltac2 Type exn ::= [ No_value ].
+(** Used for empty lists, None options and the like. *)
+
 Ltac2 Type exn ::= [ Match_failure ].
 (** Used to signal a pattern didn't match a term. *)
+
+Ltac2 Type exn ::= [ Invalid_argument (message option) ].
+(** Used to signal that an invalid argument was passed to a tactic. *)
 
 Ltac2 Type exn ::= [ Tactic_failure (message option) ].
 (** Generic error for tactic failure. *)

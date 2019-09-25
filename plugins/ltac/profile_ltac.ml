@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -376,7 +376,7 @@ let get_local_profiling_results () = List.hd Local.(!stack)
    own. *)
 module DData = struct
     type t = Feedback.doc_id * Stateid.t
-    let compare x y = Pervasives.compare x y
+    let compare x y = compare x y
 end
 
 module SM = Map.Make(DData)
@@ -417,7 +417,7 @@ let get_timer name =
 let finish_timing ~prefix name =
   let tend = System.get_time () in
   let tstart = get_timer name in
-  Feedback.msg_info(str prefix ++ pr_opt str name ++ str " ran for " ++
+  Feedback.msg_notice(str prefix ++ pr_opt str name ++ str " ran for " ++
                     System.fmt_time_difference tstart tend)
 
 (* ******************** *)
@@ -431,7 +431,7 @@ let print_results_filter ~cutoff ~filter =
   let results =
     SM.fold (fun _ -> merge_roots ~disjoint:true) !data (empty_treenode root) in
   let results = merge_roots results Local.(CList.last !stack) in
-  Feedback.msg_info (to_string ~cutoff ~filter results)
+  Feedback.msg_notice (to_string ~cutoff ~filter results)
 ;;
 
 let print_results ~cutoff =

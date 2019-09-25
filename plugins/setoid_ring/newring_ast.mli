@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -40,7 +40,8 @@ type 'constr field_mod =
   | Inject of constr_expr
 
 type ring_info =
-    { ring_carrier : types;
+    { ring_name : Names.Id.t;
+      ring_carrier : types;
       ring_req : constr;
       ring_setoid : constr;
       ring_ext : constr;
@@ -54,7 +55,8 @@ type ring_info =
       ring_post_tac : glob_tactic_expr }
 
 type field_info =
-    { field_carrier : types;
+    { field_name : Names.Id.t;
+      field_carrier : types;
       field_req : constr;
       field_cst_tac : glob_tactic_expr;
       field_pow_tac : glob_tactic_expr;

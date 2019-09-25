@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -17,7 +17,6 @@ open Libobject
 open Environ
 open Pattern
 open Libnames
-open Globnames
 
 module NamedDecl = Context.Named.Declaration
 
@@ -53,7 +52,7 @@ module SearchBlacklist =
 let iter_constructors indsp u fn env nconstr =
   for i = 1 to nconstr do
     let typ = Inductiveops.type_of_constructor env ((indsp, i), u) in
-    fn (ConstructRef (indsp, i)) env typ
+    fn (GlobRef.ConstructRef (indsp, i)) env typ
   done
 
 let iter_named_context_name_type f =
@@ -67,7 +66,7 @@ let get_current_or_goal_context ?pstate glnum =
 (* General search over hypothesis of a goal *)
 let iter_hypothesis ?pstate glnum (fn : GlobRef.t -> env -> constr -> unit) =
   let env = Global.env () in
-  let iter_hyp idh typ = fn (VarRef idh) env typ in
+  let iter_hyp idh typ = fn (GlobRef.VarRef idh) env typ in
   let evmap,e = get_current_or_goal_context ?pstate glnum in
   let pfctxt = named_context e in
   iter_named_context_name_type iter_hyp pfctxt
@@ -75,31 +74,32 @@ let iter_hypothesis ?pstate glnum (fn : GlobRef.t -> env -> constr -> unit) =
 (* General search over declarations *)
 let iter_declarations (fn : GlobRef.t -> env -> constr -> unit) =
   let env = Global.env () in
-  let iter_obj (sp, kn) lobj = match object_tag lobj with
-  | "VARIABLE" ->
-    begin try
-      let decl = Global.lookup_named (basename sp) in
-      fn (VarRef (NamedDecl.get_id decl)) env (NamedDecl.get_type decl)
-    with Not_found -> (* we are in a section *) () end
-  | "CONSTANT" ->
-    let cst = Global.constant_of_delta_kn kn in
-    let gr = ConstRef cst in
-    let (typ, _) = Typeops.type_of_global_in_context (Global.env ()) gr in
-      fn gr env typ
-  | "INDUCTIVE" ->
-    let mind = Global.mind_of_delta_kn kn in
-    let mib = Global.lookup_mind mind in
-    let iter_packet i mip =
-      let ind = (mind, i) in
-      let u = Univ.make_abstract_instance (Declareops.inductive_polymorphic_context mib) in
-      let i = (ind, u) in
-      let typ = Inductiveops.type_of_inductive env i in
-      let () = fn (IndRef ind) env typ in
-      let len = Array.length mip.mind_user_lc in
-      iter_constructors ind u fn env len
-    in
-    Array.iteri iter_packet mib.mind_packets
-  | _ -> ()
+  List.iter (fun d -> fn (GlobRef.VarRef (NamedDecl.get_id d)) env (NamedDecl.get_type d))
+    (Environ.named_context env);
+  let iter_obj (sp, kn) lobj = match lobj with
+    | AtomicObject o ->
+      begin match object_tag o with
+        | "CONSTANT" ->
+          let cst = Global.constant_of_delta_kn kn in
+          let gr = GlobRef.ConstRef cst in
+          let (typ, _) = Typeops.type_of_global_in_context (Global.env ()) gr in
+          fn gr env typ
+        | "INDUCTIVE" ->
+          let mind = Global.mind_of_delta_kn kn in
+          let mib = Global.lookup_mind mind in
+          let iter_packet i mip =
+            let ind = (mind, i) in
+            let u = Univ.make_abstract_instance (Declareops.inductive_polymorphic_context mib) in
+            let i = (ind, u) in
+            let typ = Inductiveops.type_of_inductive env i in
+            let () = fn (GlobRef.IndRef ind) env typ in
+            let len = Array.length mip.mind_user_lc in
+            iter_constructors ind u fn env len
+          in
+          Array.iteri iter_packet mib.mind_packets
+        | _ -> ()
+      end
+    | _ -> ()
   in
   try Declaremods.iter_all_segments iter_obj
   with Not_found -> ()
@@ -147,7 +147,7 @@ module ConstrPriority = struct
     -(3*(num_symbols t) + size t)
 
   let compare (_,_,_,p1) (_,_,_,p2) =
-    Pervasives.compare p1 p2
+    pervasives_compare p1 p2
 end
 
 module PriorityQueue = Heap.Functional(ConstrPriority)
@@ -200,12 +200,10 @@ let full_name_of_reference ref =
   DirPath.to_string dir ^ "." ^ Id.to_string id
 
 (** Whether a reference is blacklisted *)
-let blacklist_filter_aux () =
-  let l = SearchBlacklist.elements () in
-  fun ref env typ ->
+let blacklist_filter ref env typ =
   let name = full_name_of_reference ref in
   let is_not_bl str = not (String.string_contains ~where:name ~what:str) in
-  List.for_all is_not_bl l
+  CString.Set.for_all is_not_bl (SearchBlacklist.v ())
 
 let module_filter (mods, outside) ref env typ =
   let sp = Nametab.path_of_global ref in
@@ -227,7 +225,6 @@ let search_about_filter query gr env typ = match query with
 (** SearchPattern *)
 
 let search_pattern ?pstate gopt pat mods pr_search =
-  let blacklist_filter = blacklist_filter_aux () in
   let filter ref env typ =
     module_filter mods ref env typ &&
     pattern_filter pat ref env (Evd.from_env env) (* FIXME *) (EConstr.of_constr typ) &&
@@ -251,7 +248,6 @@ let rewrite_pat2 pat =
 let search_rewrite ?pstate gopt pat mods pr_search =
   let pat1 = rewrite_pat1 pat in
   let pat2 = rewrite_pat2 pat in
-  let blacklist_filter = blacklist_filter_aux () in
   let filter ref env typ =
     module_filter mods ref env typ &&
     (pattern_filter pat1 ref env (Evd.from_env env) (* FIXME *) (EConstr.of_constr typ) ||
@@ -266,7 +262,6 @@ let search_rewrite ?pstate gopt pat mods pr_search =
 (** Search *)
 
 let search_by_head ?pstate gopt pat mods pr_search =
-  let blacklist_filter = blacklist_filter_aux () in
   let filter ref env typ =
     module_filter mods ref env typ &&
     head_filter pat ref env (Evd.from_env env) (* FIXME *) (EConstr.of_constr typ) &&
@@ -280,7 +275,6 @@ let search_by_head ?pstate gopt pat mods pr_search =
 (** SearchAbout *)
 
 let search_about ?pstate gopt items mods pr_search =
-  let blacklist_filter = blacklist_filter_aux () in
   let filter ref env typ =
     let eqb b1 b2 = if b1 then b2 else not b2 in
     module_filter mods ref env typ &&
@@ -324,7 +318,6 @@ let interface_search ?pstate =
   let (name, tpe, subtpe, mods, blacklist) =
     extract_flags [] [] [] [] false flags
   in
-  let blacklist_filter = blacklist_filter_aux () in
   let filter_function ref env constr =
     let id = Names.Id.to_string (Nametab.basename_of_global ref) in
     let path = Libnames.dirpath (Nametab.path_of_global ref) in
@@ -378,6 +371,3 @@ let interface_search ?pstate =
   in
   let () = generic_search ?pstate glnum iter in
   !ans
-
-let blacklist_filter ref env typ =
-  blacklist_filter_aux () ref env typ

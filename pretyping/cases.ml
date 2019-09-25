@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -367,7 +367,7 @@ let make_return_predicate_ltac_lvar env sigma na tm c =
      - if [c] is a variable [id'], then [x] should now become [id']
      - otherwise, [x] should be hidden *)
   match na, DAst.get tm with
-  | Name id, (GVar id' | GRef (Globnames.VarRef id', _)) when Id.equal id id' ->
+  | Name id, (GVar id' | GRef (GlobRef.VarRef id', _)) when Id.equal id id' ->
      let expansion = match kind sigma c with
        | Var id' -> Name id'
        | _ -> Anonymous in

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -25,9 +25,6 @@ val constr_expr_eq : constr_expr -> constr_expr -> bool
 
 val local_binder_eq : local_binder_expr -> local_binder_expr -> bool
 (** Equality on [local_binder_expr]. Same properties as [constr_expr_eq]. *)
-
-val binding_kind_eq : Decl_kinds.binding_kind -> Decl_kinds.binding_kind -> bool
-(** Equality on [binding_kind] *)
 
 val binder_kind_eq : binder_kind -> binder_kind -> bool
 (** Equality on [binder_kind] *)

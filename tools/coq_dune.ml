@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -128,6 +128,7 @@ module Options = struct
   [ { enabled = false; cmd = "-debug"; }
   ; { enabled = false; cmd = "-native_compiler"; }
   ; { enabled = true; cmd = "-allow-sprop"; }
+  ; { enabled = true; cmd = "-w +default"; }
   ]
 
   let build_coq_flags () =
@@ -192,9 +193,7 @@ let pp_vo_dep dir fmt vo =
   pp_rule fmt all_targets deps action
 
 let pp_mlg_dep _dir fmt ml =
-  let target = Filename.(remove_extension ml) ^ ".ml" in
-  let mlg_rule = "(run coqpp %{pp-file})" in
-  pp_rule fmt [target] [ml] mlg_rule
+  fprintf fmt "@[(coq.pp (modules %s))@]@\n" (Filename.remove_extension ml)
 
 let pp_dep dir fmt oo = match oo with
   | VO vo -> pp_vo_dep dir fmt vo

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -197,9 +197,9 @@ let pp_with ft pp =
     | Ppcmd_print_break(m,n)  -> pp_print_break ft m n
     | Ppcmd_force_newline     -> pp_force_newline ft ()
     | Ppcmd_comment coms      -> List.iter (pr_com ft) coms
-    | Ppcmd_tag(tag, s)       -> pp_open_tag  ft tag;
+    | Ppcmd_tag(tag, s)       -> pp_open_tag  ft tag [@warning "-3"];
                                  pp_cmd s;
-                                 pp_close_tag ft ()
+                                 pp_close_tag ft () [@warning "-3"]
   in
   try pp_cmd pp
   with reraise ->

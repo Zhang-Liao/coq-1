@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -130,7 +130,7 @@ let suggest_common env ppid used ids_typ skip =
     str "should start with one of the following commands:"++spc()++
     v 0 (
     prlist_with_sep cut (fun x->str"Proof using " ++x++ str". ") !valid_exprs));
-  if !Flags.record_aux_file
+  if Aux_file.recording ()
   then
     let s = string_of_ppcmds (prlist_with_sep (fun _ -> str";")  (fun x->x) !valid_exprs) in
     record_proof_using s

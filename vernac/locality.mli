@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -20,7 +20,7 @@
 
 val make_locality : bool option -> bool
 val make_non_locality : bool option -> bool
-val enforce_locality_exp : bool option -> Decl_kinds.discharge -> Decl_kinds.locality
+val enforce_locality_exp : bool option -> Vernacexpr.discharge -> DeclareDef.locality
 val enforce_locality : bool option -> bool
 
 (** For commands whose default is to not discharge but to export:

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -29,7 +29,7 @@ module Entry : sig
   val create : string -> 'a t
   val parse : 'a t -> Parsable.t -> 'a
   val print : Format.formatter -> 'a t -> unit
-  val of_parser : string -> (Tok.t Stream.t -> 'a) -> 'a t
+  val of_parser : string -> (Gramlib.Plexing.location_function -> Tok.t Stream.t -> 'a) -> 'a t
   val parse_token_stream : 'a t -> Tok.t Stream.t -> 'a
   val name : 'a t -> string
 end
@@ -182,6 +182,7 @@ module Constr :
     val operconstr : constr_expr Entry.t
     val ident : Id.t Entry.t
     val global : qualid Entry.t
+    val universe_name : Glob_term.glob_sort_name Entry.t
     val universe_level : Glob_term.glob_level Entry.t
     val sort : Glob_term.glob_sort Entry.t
     val sort_family : Sorts.family Entry.t
@@ -211,8 +212,19 @@ val epsilon_value : ('a -> 'self) -> ('self, _, 'a) Extend.symbol -> 'self optio
 type gram_reinit = Gramlib.Gramext.g_assoc * Gramlib.Gramext.position
 (** Type of reinitialization data *)
 
-val grammar_extend : 'a Entry.t -> gram_reinit option ->
-  'a Extend.extend_statement -> unit
+type 'a single_extend_statement =
+  string option *
+  (* Level *)
+  Gramlib.Gramext.g_assoc option *
+  (* Associativity *)
+  'a production_rule list
+  (* Symbol list with the interpretation function *)
+
+type 'a extend_statement =
+  Gramlib.Gramext.position option *
+  'a single_extend_statement list
+
+val grammar_extend : 'a Entry.t -> gram_reinit option -> 'a extend_statement -> unit
 (** Extend the grammar of Coq, without synchronizing it with the backtracking
     mechanism. This means that grammar extensions defined this way will survive
     an undo. *)

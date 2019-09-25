@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,7 @@ struct
     (* we use first size, then usual comparison *)
     let d = String.length s1 - String.length s2 in
     if d <> 0 then d
-    else Pervasives.compare s1 s2
+    else compare s1 s2
 end
 
 module Proposals = Set.Make(StringOrd)

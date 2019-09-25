@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -10,8 +10,6 @@
 
 open Names
 open Constr
-open Decl_kinds
-open Constrexpr
 open Vernacexpr
 
 (** {6 Fixpoints and cofixpoints} *)
@@ -19,82 +17,51 @@ open Vernacexpr
 (** Entry points for the vernacular commands Fixpoint and CoFixpoint *)
 
 val do_fixpoint_interactive :
-  locality -> polymorphic -> (fixpoint_expr * decl_notation list) list -> Proof_global.t
+  scope:DeclareDef.locality -> poly:bool -> fixpoint_expr list -> Lemmas.t
 
 val do_fixpoint :
-  locality -> polymorphic -> (fixpoint_expr * decl_notation list) list -> unit
+  scope:DeclareDef.locality -> poly:bool -> fixpoint_expr list -> unit
 
 val do_cofixpoint_interactive :
-  locality -> polymorphic -> (cofixpoint_expr * decl_notation list) list -> Proof_global.t
+  scope:DeclareDef.locality -> poly:bool -> cofixpoint_expr list -> Lemmas.t
 
 val do_cofixpoint :
-  locality -> polymorphic -> (cofixpoint_expr * decl_notation list) list -> unit
+  scope:DeclareDef.locality -> poly:bool -> cofixpoint_expr list -> unit
 
 (************************************************************************)
 (** Internal API  *)
 (************************************************************************)
 
-type structured_fixpoint_expr = {
-  fix_name : Id.t;
-  fix_univs : Constrexpr.universe_decl_expr option;
-  fix_annot : lident option;
-  fix_binders : local_binder_expr list;
-  fix_body : constr_expr option;
-  fix_type : constr_expr
-}
-
 (** Typing global fixpoints and cofixpoint_expr *)
+
+val adjust_rec_order
+  :  structonly:bool
+  -> Constrexpr.local_binder_expr list
+  -> Constrexpr.recursion_order_expr option
+  -> lident option
 
 (** Exported for Program *)
 val interp_recursive :
   (* Misc arguments *)
   program_mode:bool -> cofix:bool ->
   (* Notations of the fixpoint / should that be folded in the previous argument? *)
-  structured_fixpoint_expr list -> decl_notation list ->
-
+  lident option fix_expr_gen list ->
   (* env / signature / univs / evar_map *)
   (Environ.env * EConstr.named_context * UState.universe_decl * Evd.evar_map) *
   (* names / defs / types *)
   (Id.t list * Sorts.relevance list * EConstr.constr option list * EConstr.types list) *
   (* ctx per mutual def / implicits / struct annotations *)
-  (EConstr.rel_context * Impargs.manual_explicitation list * int option) list
+  (EConstr.rel_context * Impargs.manual_implicits * int option) list
 
 (** Exported for Funind *)
 
-(** Extracting the semantical components out of the raw syntax of
-   (co)fixpoints declarations *)
+type recursive_preentry = Id.t list * Sorts.relevance list * constr option list * types list
 
-val extract_fixpoint_components : structonly:bool ->
-  (fixpoint_expr * decl_notation list) list ->
-    structured_fixpoint_expr list * decl_notation list
-
-val extract_cofixpoint_components :
-  (cofixpoint_expr * decl_notation list) list ->
-    structured_fixpoint_expr list * decl_notation list
-
-type recursive_preentry =
-  Id.t list * Sorts.relevance list * constr option list * types list
-
-val interp_fixpoint :
-  cofix:bool ->
-  structured_fixpoint_expr list -> decl_notation list ->
-  recursive_preentry * UState.universe_decl * UState.t *
-  (EConstr.rel_context * Impargs.manual_implicits * int option) list
-
-(** Registering fixpoints and cofixpoints in the environment *)
-
-(** [Not used so far] *)
-val declare_fixpoint :
-  locality -> polymorphic ->
-  recursive_preentry * UState.universe_decl * UState.t *
-  (Constr.rel_context * Impargs.manual_implicits * int option) list ->
-  Proof_global.lemma_possible_guards -> decl_notation list -> unit
-
-val declare_cofixpoint :
-  locality -> polymorphic ->
-  recursive_preentry * UState.universe_decl * UState.t *
-  (Constr.rel_context * Impargs.manual_implicits * int option) list ->
-  decl_notation list -> unit
+val interp_fixpoint
+  :  cofix:bool
+  -> lident option fix_expr_gen list
+  -> recursive_preentry * UState.universe_decl * UState.t *
+     (EConstr.rel_context * Impargs.manual_implicits * int option) list
 
 (** Very private function, do not use *)
 val compute_possible_guardness_evidences :

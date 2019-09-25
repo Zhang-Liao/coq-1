@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -81,12 +81,10 @@ let pf_type_of                   = pf_reduce type_of
 let pf_get_type_of               = pf_reduce Retyping.get_type_of
 
 let pf_conv_x gl                = pf_reduce test_conversion gl Reduction.CONV
-let pf_conv_x_leq gl            = pf_reduce test_conversion gl Reduction.CUMUL
 let pf_const_value              = pf_reduce (fun env _ c -> EConstr.of_constr (constant_value_in env c))
 
 let pf_reduce_to_quantified_ind = pf_reduce reduce_to_quantified_ind
 let pf_reduce_to_atomic_ind     = pf_reduce reduce_to_atomic_ind
-
 let pf_hnf_type_of gls          = pf_get_type_of gls %> pf_whd_all gls
 
 (* Pretty-printers *)
@@ -181,14 +179,7 @@ module New = struct
   let pf_hnf_type_of gl t =
     pf_whd_all gl (pf_get_type_of gl t)
 
-  let pf_whd_all gl t = pf_apply whd_all gl t
   let pf_compute gl t = pf_apply compute gl t
 
   let pf_nf_evar gl t = nf_evar (project gl) t
-
-  let pf_undefined_evars gl =
-    let sigma = Proofview.Goal.sigma gl in
-    let ev = Proofview.Goal.goal gl in
-    let evi = Evd.find sigma ev in
-      Evarutil.filtered_undefined_evars_of_evar_info sigma evi
 end

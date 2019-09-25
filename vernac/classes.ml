@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -28,10 +28,7 @@ module RelDecl = Context.Rel.Declaration
 module NamedDecl = Context.Named.Declaration
 (*i*)
 
-open Decl_kinds
-open Entries
-
-let set_typeclass_transparency c local b = 
+let set_typeclass_transparency c local b =
   Hints.add_hints ~local [typeclasses_db]
     (Hints.HintsTransparencyEntry (Hints.HintsReferences [c], b))
 
@@ -180,7 +177,7 @@ let discharge_class (_,cl) =
   let open CVars in
   let repl = Lib.replacement_context () in
   let rel_of_variable_context ctx = List.fold_right
-    ( fun (decl,_) (ctx', subst) ->
+    ( fun decl (ctx', subst) ->
         let decl' = decl |> NamedDecl.map_constr (substn_vars 1 subst) |> NamedDecl.to_rel_decl in
         (decl' :: ctx', NamedDecl.get_id decl :: subst)
     ) ctx ([], []) in
@@ -194,6 +191,7 @@ let discharge_class (_,cl) =
     ctx
   in
   let abs_context cl =
+    let open GlobRef in
     match cl.cl_impl with
       | VarRef _ | ConstructRef _ -> assert false
       | ConstRef cst -> Lib.section_segment_of_constant cst
@@ -256,7 +254,7 @@ let add_class env sigma cl =
       | Some (Backward, info) ->
         (match body with
          | None -> CErrors.user_err Pp.(str "Non-definable projection can not be declared as a subinstance")
-         | Some b -> declare_instance ~warn:true env sigma (Some info) false (ConstRef b))
+         | Some b -> declare_instance ~warn:true env sigma (Some info) false (GlobRef.ConstRef b))
       | _ -> ())
     cl.cl_projs
 
@@ -281,9 +279,6 @@ let existing_instance glob g info =
                          ~hdr:"declare_instance"
                          (Pp.str "Constant does not build instances of a declared type class.")
 
-let mismatched_params env n m = Implicit_quantifiers.mismatched_ctx_inst_err env Parameters n m
-let mismatched_props env n m = Implicit_quantifiers.mismatched_ctx_inst_err env Properties n m
-
 (* Declare everything in the parameters as implicit, and the class instance as well *)
 
 let type_ctx_instance ~program_mode env sigma ctx inst subst =
@@ -302,6 +297,7 @@ let type_ctx_instance ~program_mode env sigma ctx inst subst =
   in aux (sigma, subst, []) inst (List.rev ctx)
 
 let id_of_class cl =
+  let open GlobRef in
   match cl.cl_impl with
     | ConstRef kn -> Label.to_id @@ Constant.label kn
     | IndRef (kn,i) ->
@@ -317,23 +313,22 @@ let instance_hook info global imps ?hook cst =
   declare_instance env sigma (Some info) (not global) cst;
   (match hook with Some h -> h cst | None -> ())
 
-let declare_instance_constant info global imps ?hook id decl poly sigma term termtype =
+let declare_instance_constant info global imps ?hook name decl poly sigma term termtype =
   (* XXX: Duplication of the declare_constant path *)
-  let kind = IsDefinition Instance in
   let sigma =
     let levels = Univ.LSet.union (CVars.universes_of_constr termtype)
                                  (CVars.universes_of_constr term) in
     Evd.restrict_universe_context sigma levels
   in
   let uctx = Evd.check_univ_decl ~poly sigma decl in
+  let kind = Decls.(IsDefinition Instance) in
   let entry = Declare.definition_entry ~types:termtype ~univs:uctx term in
-  let cdecl = (DefinitionEntry entry, kind) in
-  let kn = Declare.declare_constant id cdecl in
-  Declare.definition_message id;
-  Declare.declare_univ_binders (ConstRef kn) (Evd.universe_binders sigma);
-  instance_hook info global imps ?hook (ConstRef kn)
+  let kn = Declare.declare_constant ~name ~kind (Declare.DefinitionEntry entry) in
+  Declare.definition_message name;
+  Declare.declare_univ_binders (GlobRef.ConstRef kn) (Evd.universe_binders sigma);
+  instance_hook info global imps ?hook (GlobRef.ConstRef kn)
 
-let do_declare_instance sigma ~global ~poly k u ctx ctx' pri decl imps subst id =
+let do_declare_instance sigma ~global ~poly k u ctx ctx' pri decl imps subst name =
   let subst = List.fold_left2
       (fun subst' s decl -> if is_local_assum decl then s :: subst' else subst')
       [] subst (snd k.cl_context)
@@ -341,19 +336,19 @@ let do_declare_instance sigma ~global ~poly k u ctx ctx' pri decl imps subst id 
   let (_, ty_constr) = instance_constructor (k,u) subst in
   let termtype = it_mkProd_or_LetIn ty_constr (ctx' @ ctx) in
   let sigma, entry = DeclareDef.prepare_parameter ~allow_evars:false ~poly sigma decl termtype in
-  let cst = Declare.declare_constant ~internal:Declare.InternalTacticRequest id
-      (ParameterEntry entry, Decl_kinds.IsAssumption Decl_kinds.Logical) in
-  Declare.declare_univ_binders (ConstRef cst) (Evd.universe_binders sigma);
-  instance_hook pri global imps (ConstRef cst)
+  let cst = Declare.declare_constant ~name
+      ~kind:Decls.(IsAssumption Logical) (Declare.ParameterEntry entry) in
+  Declare.declare_univ_binders (GlobRef.ConstRef cst) (Evd.universe_binders sigma);
+  instance_hook pri global imps (GlobRef.ConstRef cst)
 
 let declare_instance_program env sigma ~global ~poly id pri imps decl term termtype =
-  let hook _ _ vis gr =
-    let cst = match gr with ConstRef kn -> kn | _ -> assert false in
-    Impargs.declare_manual_implicits false gr imps;
+  let hook { DeclareDef.Hook.S.scope; dref; _ } =
+    let cst = match dref with GlobRef.ConstRef kn -> kn | _ -> assert false in
+    Impargs.declare_manual_implicits false dref imps;
     let pri = intern_info pri in
     let env = Global.env () in
     let sigma = Evd.from_env env in
-    declare_instance env sigma (Some pri) (not global) (ConstRef cst)
+    declare_instance env sigma (Some pri) (not global) (GlobRef.ConstRef cst)
   in
   let obls, constr, typ =
     match term with
@@ -364,25 +359,25 @@ let declare_instance_program env sigma ~global ~poly id pri imps decl term termt
       in obls, Some constr, typ
     | None -> [||], None, termtype
   in
-  let hook = Lemmas.mk_hook hook in
+  let hook = DeclareDef.Hook.make hook in
   let ctx = Evd.evar_universe_context sigma in
-  ignore(Obligations.add_definition id ?term:constr
-           ~univdecl:decl typ ctx ~kind:(Global,poly,Instance) ~hook obls)
+  ignore(Obligations.add_definition ~name:id ?term:constr
+           ~univdecl:decl ~scope:(DeclareDef.Global Declare.ImportDefaultBehavior) ~poly ~kind:Decls.Instance ~hook typ ctx obls)
 
-
-let declare_instance_open sigma ?hook ~tac ~global ~poly id pri imps decl ids term termtype =
+let declare_instance_open sigma ?hook ~tac ~global ~poly id pri imps udecl ids term termtype =
   (* spiwack: it is hard to reorder the actions to do
      the pretyping after the proof has opened. As a
      consequence, we use the low-level primitives to code
      the refinement manually.*)
   let gls = List.rev (Evd.future_goals sigma) in
   let sigma = Evd.reset_future_goals sigma in
-  let kind = Decl_kinds.Global, poly, Decl_kinds.DefinitionBody Decl_kinds.Instance in
-  let pstate = Lemmas.start_proof id ~pl:decl kind sigma (EConstr.of_constr termtype)
-      ~hook:(Lemmas.mk_hook
-               (fun _ _ _ -> instance_hook pri global imps ?hook)) in
+  let scope = DeclareDef.Global Declare.ImportDefaultBehavior in
+  let kind = Decls.(IsDefinition Instance) in
+  let hook = DeclareDef.Hook.(make (fun { S.dref ; _ } -> instance_hook pri global imps ?hook dref)) in
+  let info = Lemmas.Info.make ~hook ~scope ~kind () in
+  let lemma = Lemmas.start_lemma ~name:id ~poly ~udecl ~info sigma (EConstr.of_constr termtype) in
   (* spiwack: I don't know what to do with the status here. *)
-  let pstate =
+  let lemma =
     if not (Option.is_empty term) then
       let init_refine =
         Tacticals.New.tclTHENLIST [
@@ -391,18 +386,18 @@ let declare_instance_open sigma ?hook ~tac ~global ~poly id pri imps decl ids te
           Tactics.New.reduce_after_refine;
         ]
       in
-      let pstate, _ = Pfedit.by init_refine pstate in
-      pstate
+      let lemma, _ = Lemmas.by init_refine lemma in
+      lemma
     else
-      let pstate, _ = Pfedit.by (Tactics.auto_intros_tac ids) pstate in
-      pstate
+      let lemma, _ = Lemmas.by (Tactics.auto_intros_tac ids) lemma in
+      lemma
   in
   match tac with
   | Some tac ->
-    let pstate, _ = Pfedit.by tac pstate in
-    pstate
+    let lemma, _ = Lemmas.by tac lemma in
+    lemma
   | None ->
-    pstate
+    lemma
 
 let do_instance_subst_constructor_and_ty subst k u ctx =
   let subst =
@@ -445,7 +440,7 @@ let do_instance_type_ctx_instance props k env' ctx' sigma ~program_mode subst =
              let {CAst.loc;v=mid} = get_id loc_mid in
              List.iter (fun (n, _, x) ->
                  if Name.equal n (Name mid) then
-                   Option.iter (fun x -> Dumpglob.add_glob ?loc (ConstRef x)) x) k.cl_projs;
+                   Option.iter (fun x -> Dumpglob.add_glob ?loc (GlobRef.ConstRef x)) x) k.cl_projs;
              c :: props, rest'
            with Not_found ->
              ((CAst.make @@ CHole (None(* Some Evar_kinds.GoalEvar *), Namegen.IntroAnonymous, None)) :: props), rest
@@ -479,9 +474,8 @@ let do_instance_interactive env sigma ?hook ~tac ~global ~poly cty k u ctx ctx' 
 let do_instance env env' sigma ?hook ~global ~poly cty k u ctx ctx' pri decl imps subst id props =
   let term, termtype, sigma =
     match props with
-    | (true, { CAst.v = CRecord fs }) ->
-      if List.length fs > List.length k.cl_props then
-        mismatched_props env' (List.map snd fs) k.cl_props;
+    | (true, { CAst.v = CRecord fs; loc }) ->
+      check_duplicate ?loc fs;
       let subst, sigma = do_instance_type_ctx_instance fs k env' ctx' sigma ~program_mode:false subst in
       let term, termtype =
         do_instance_subst_constructor_and_ty subst k u (ctx' @ ctx) in
@@ -502,9 +496,8 @@ let do_instance env env' sigma ?hook ~global ~poly cty k u ctx ctx' pri decl imp
 let do_instance_program env env' sigma ?hook ~global ~poly cty k u ctx ctx' pri decl imps subst id opt_props =
   let term, termtype, sigma =
     match opt_props with
-    | Some (true, { CAst.v = CRecord fs }) ->
-      if List.length fs > List.length k.cl_props then
-        mismatched_props env' (List.map snd fs) k.cl_props;
+    | Some (true, { CAst.v = CRecord fs; loc }) ->
+      check_duplicate ?loc fs;
       let subst, sigma =
         do_instance_type_ctx_instance fs k env' ctx' sigma ~program_mode:true subst in
      let term, termtype =
@@ -532,13 +525,12 @@ let do_instance_program env env' sigma ?hook ~global ~poly cty k u ctx ctx' pri 
 let interp_instance_context ~program_mode env ctx ~generalize pl tclass =
   let sigma, decl = Constrexpr_ops.interp_univ_decl_opt env pl in
   let tclass =
-    if generalize then CAst.make @@ CGeneralization (Implicit, Some AbsPi, tclass)
+    if generalize then CAst.make @@ CGeneralization (Glob_term.Implicit, Some AbsPi, tclass)
     else tclass
   in
   let sigma, (impls, ((env', ctx), imps)) = interp_context_evars ~program_mode env sigma ctx in
   let sigma, (c', imps') = interp_type_evars_impls ~program_mode ~impls env' sigma tclass in
-  let len = Context.Rel.nhyps ctx in
-  let imps = imps @ Impargs.lift_implicits len imps' in
+  let imps = imps @ imps' in
   let ctx', c = decompose_prod_assum sigma c' in
   let ctx'' = ctx' @ ctx in
   let (k, u), args = Typeclasses.dest_class_app (push_rel_context ctx'' env) sigma c in
@@ -574,7 +566,7 @@ let new_instance_common ~program_mode ~generalize env instid ctx cl =
   id, env', sigma, k, u, cty, ctx', ctx, imps, subst, decl
 
 let new_instance_interactive ?(global=false)
-    poly instid ctx cl
+    ~poly instid ctx cl
     ?(generalize=true) ?(tac:unit Proofview.tactic option) ?hook pri =
   let env = Global.env() in
   let id, env', sigma, k, u, cty, ctx', ctx, imps, subst, decl =
@@ -583,7 +575,7 @@ let new_instance_interactive ?(global=false)
     cty k u ctx ctx' pri decl imps subst id
 
 let new_instance_program ?(global=false)
-    poly instid ctx cl opt_props
+    ~poly instid ctx cl opt_props
     ?(generalize=true) ?hook pri =
   let env = Global.env() in
   let id, env', sigma, k, u, cty, ctx', ctx, imps, subst, decl =
@@ -593,7 +585,7 @@ let new_instance_program ?(global=false)
   id
 
 let new_instance ?(global=false)
-    poly instid ctx cl props
+    ~poly instid ctx cl props
     ?(generalize=true) ?hook pri =
   let env = Global.env() in
   let id, env', sigma, k, u, cty, ctx', ctx, imps, subst, decl =
@@ -602,7 +594,7 @@ let new_instance ?(global=false)
     cty k u ctx ctx' pri decl imps subst id props;
   id
 
-let declare_new_instance ?(global=false) ~program_mode poly instid ctx cl pri =
+let declare_new_instance ?(global=false) ~program_mode ~poly instid ctx cl pri =
   let env = Global.env() in
   let ({CAst.loc;v=instid}, pl) = instid in
   let sigma, k, u, cty, ctx', ctx, imps, subst, decl =

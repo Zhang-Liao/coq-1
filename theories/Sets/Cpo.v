@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -100,11 +100,9 @@ Hint Resolve Totally_ordered_definition Upper_Bound_definition
 Section Specific_orders.
   Variable U : Type.
 
-  #[universes(template)]
   Record Cpo : Type := Definition_of_cpo
     {PO_of_cpo : PO U; Cpo_cond : Complete U PO_of_cpo}.
 
-  #[universes(template)]
   Record Chain : Type := Definition_of_chain
     {PO_of_chain : PO U;
     Chain_cond : Totally_ordered U PO_of_chain (@Carrier_of _ PO_of_chain)}.

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -26,7 +26,7 @@ val gen_eauto : ?debug:debug -> bool * int -> delayed_open_constr list ->
 val eauto_with_bases :
   ?debug:debug ->
   bool * int ->
-  delayed_open_constr list -> hint_db list -> Proofview.V82.tac
+  delayed_open_constr list -> hint_db list -> unit Proofview.tactic
 
 val autounfold : hint_db_name list -> Locus.clause -> unit Proofview.tactic
 val autounfold_tac : hint_db_name list option -> Locus.clause -> unit Proofview.tactic

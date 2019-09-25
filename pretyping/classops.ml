@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -58,7 +58,7 @@ let cl_typ_ord t1 t2 = match t1, t2 with
   | CL_CONST c1, CL_CONST c2 -> Constant.CanOrd.compare c1 c2
   | CL_PROJ c1, CL_PROJ c2 -> Projection.Repr.CanOrd.compare c1 c2
   | CL_IND i1, CL_IND i2 -> ind_ord i1 i2
-  | _ -> Pervasives.compare t1 t2 (** OK *)
+  | _ -> pervasives_compare t1 t2 (** OK *)
 
 module ClTyp = struct
   type t = cl_typ
@@ -225,14 +225,14 @@ let string_of_class = function
   | CL_FUN -> "Funclass"
   | CL_SORT -> "Sortclass"
   | CL_CONST sp ->
-    string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty (ConstRef sp))
+    string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty (GlobRef.ConstRef sp))
   | CL_PROJ sp ->
     let sp = Projection.Repr.constant sp in
-    string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty (ConstRef sp))
+    string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty (GlobRef.ConstRef sp))
   | CL_IND sp ->
-      string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty (IndRef sp))
+      string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty (GlobRef.IndRef sp))
   | CL_SECVAR sp ->
-      string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty (VarRef sp))
+      string_of_qualid (Nametab.shortest_qualid_of_global Id.Set.empty (GlobRef.VarRef sp))
 
 let pr_class x = str (string_of_class x)
 
@@ -276,8 +276,8 @@ let lookup_path_to_fun_from env sigma s =
 let lookup_path_to_sort_from env sigma s =
   apply_on_class_of env sigma s lookup_path_to_sort_from_class
 
-let mkNamed = function
-  | GlobRef.ConstRef c -> EConstr.mkConst c
+let mkNamed = let open GlobRef in function
+  | ConstRef c -> EConstr.mkConst c
   | VarRef v -> EConstr.mkVar v
   | ConstructRef c -> EConstr.mkConstruct c
   | IndRef i -> EConstr.mkInd i
@@ -313,7 +313,9 @@ let compare_path p q = !path_comparator p q
 
 let warn_ambiguous_path =
   CWarnings.create ~name:"ambiguous-paths" ~category:"typechecker"
-    (fun l -> strbrk"Ambiguous paths: " ++ prlist_with_sep fnl print_path l)
+    (fun l -> prlist_with_sep fnl (fun (c,p,q) ->
+         str"New coercion path " ++ print_path (c,p) ++
+         str" is ambiguous with existing " ++ print_path (c, q) ++ str".") l)
 
 (* add_coercion_in_graph : coe_index * cl_index * cl_index -> unit
                          coercion,source,target *)
@@ -323,20 +325,20 @@ let different_class_params env i =
     if (snd ci).cl_param > 0 then true
     else 
       match fst ci with
-      | CL_IND i -> Environ.is_polymorphic env (IndRef i)
-      | CL_CONST c -> Environ.is_polymorphic env (ConstRef c)
+      | CL_IND i -> Environ.is_polymorphic env (GlobRef.IndRef i)
+      | CL_CONST c -> Environ.is_polymorphic env (GlobRef.ConstRef c)
       | _ -> false
 
 let add_coercion_in_graph env sigma (ic,source,target) =
   let old_inheritance_graph = !inheritance_graph in
   let ambig_paths =
-    (ref [] : ((cl_index * cl_index) * inheritance_path) list ref) in
+    (ref [] : ((cl_index * cl_index) * inheritance_path * inheritance_path) list ref) in
   let try_add_new_path (i,j as ij) p =
     if not (Bijint.Index.equal i j) || different_class_params env i then
       match lookup_path_between_class ij with
       | q ->
         if not (compare_path env sigma p q) then
-          ambig_paths := (ij,p)::!ambig_paths;
+          ambig_paths := (ij,p,q)::!ambig_paths;
         false
       | exception Not_found -> (add_new_path ij p; true)
     else
@@ -391,15 +393,15 @@ let reference_arity_length env sigma ref =
   List.length (fst (Reductionops.splay_arity env sigma (EConstr.of_constr t)))
 
 let projection_arity_length env sigma p =
-  let len = reference_arity_length env sigma (ConstRef (Projection.Repr.constant p)) in
+  let len = reference_arity_length env sigma (GlobRef.ConstRef (Projection.Repr.constant p)) in
   len - Projection.Repr.npars p
 
 let class_params env sigma = function
   | CL_FUN | CL_SORT -> 0
-  | CL_CONST sp -> reference_arity_length env sigma (ConstRef sp)
+  | CL_CONST sp -> reference_arity_length env sigma (GlobRef.ConstRef sp)
   | CL_PROJ sp -> projection_arity_length env sigma sp
-  | CL_SECVAR sp -> reference_arity_length env sigma (VarRef sp)
-  | CL_IND sp  -> reference_arity_length env sigma (IndRef sp)
+  | CL_SECVAR sp -> reference_arity_length env sigma (GlobRef.VarRef sp)
+  | CL_IND sp  -> reference_arity_length env sigma (GlobRef.IndRef sp)
 
 (* add_class : cl_typ -> locality_flag option -> bool -> unit *)
 
@@ -441,7 +443,7 @@ let coercion_of_reference r =
 module CoercionPrinting =
   struct
     type t = coe_typ
-    let compare = GlobRef.Ordered.compare
+    module Set = GlobRef.Set
     let encode _env = coercion_of_reference
     let subst = subst_coe_typ
     let printer x = Nametab.pr_global_env Id.Set.empty x

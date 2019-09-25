@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -11,8 +11,7 @@
 open Util
 
 let check_vio (ts,f_in) =
-  Dumpglob.noglob ();
-  let _, _, _, _, tasks, _ = Library.load_library_todo f_in in
+  let _, _, _, tasks, _ = Library.load_library_todo f_in in
   Stm.set_compilation_hints f_in;
   List.fold_left (fun acc ids -> Stm.check_task f_in tasks ids && acc) true ts
 
@@ -29,7 +28,7 @@ let schedule_vio_checking j fs =
   if j < 1 then CErrors.user_err Pp.(str "The number of workers must be bigger than 0");
   let jobs = ref [] in
   List.iter (fun long_f_dot_vio ->
-    let _,_,_,_, tasks, _ = Library.load_library_todo long_f_dot_vio in
+    let _,_,_, tasks, _ = Library.load_library_todo long_f_dot_vio in
     Stm.set_compilation_hints long_f_dot_vio;
     let infos = Stm.info_tasks tasks in
     let eta = List.fold_left (fun a (_,t,_) -> a +. t) 0.0 infos in
@@ -142,5 +141,3 @@ let schedule_vio_compilation j fs =
     List.iter (fun (f,_) -> Unix.utimes (Filename.chop_extension f^".vo") t t) all_jobs;
   end;
   exit !rc
-
-  

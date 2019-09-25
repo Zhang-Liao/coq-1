@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -23,7 +23,8 @@ type t =
 
   ; echo : bool
 
-  ; outputstate : string option;
+  ; outputstate : string option
+  ; glob_out    : Dumpglob.glob_output
   }
 
 let default =
@@ -40,6 +41,7 @@ let default =
   ; echo = false
 
   ; outputstate = None
+  ; glob_out = Dumpglob.MultFiles
   }
 
 let depr opt =
@@ -48,7 +50,7 @@ let depr opt =
 (* XXX Remove this duplication with Coqargs *)
 let fatal_error exn =
   Topfmt.(in_phase ~phase:ParsingCommandLine print_err_exn exn);
-  let exit_code = if CErrors.(is_anomaly exn || not (handled exn)) then 129 else 1 in
+  let exit_code = if (CErrors.is_anomaly exn) then 129 else 1 in
   exit exit_code
 
 let error_missing_arg s =
@@ -187,6 +189,15 @@ let parse arglist : t =
         | "-outputstate" ->
           set_outputstate oval (next ())
 
+        (* Glob options *)
+        |"-no-glob" | "-noglob" ->
+          { oval with glob_out = Dumpglob.NoGlob }
+
+        |"-dump-glob" ->
+          let file = next () in
+          { oval with glob_out = Dumpglob.File file }
+
+        (* Rest *)
         | s ->
           extras := s :: !extras;
           oval
@@ -199,3 +210,11 @@ let parse arglist : t =
     check_compilation_output_name_consistency args;
     args
   with any -> fatal_error any
+
+let parse args =
+  let opts = parse args in
+  { opts with
+    compile_list = List.rev opts.compile_list
+  ; vio_tasks = List.rev opts.vio_tasks
+  ; vio_files = List.rev opts.vio_files
+  }

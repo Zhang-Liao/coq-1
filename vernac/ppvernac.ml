@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -16,7 +16,6 @@ open Util
 open CAst
 
 open Extend
-open Decl_kinds
 open Constrexpr
 open Constrexpr_ops
 open Vernacexpr
@@ -39,8 +38,8 @@ open Pputils
     pr_sep_com spc @@ pr_lconstr_expr env sigma
 
   let pr_uconstraint (l, d, r) =
-    pr_glob_level l ++ spc () ++ Univ.pr_constraint_type d ++ spc () ++
-      pr_glob_level r
+    pr_glob_sort_name l ++ spc () ++ Univ.pr_constraint_type d ++ spc () ++
+      pr_glob_sort_name r
 
   let pr_univ_name_list = function
     | None -> mt ()
@@ -348,17 +347,19 @@ open Pputils
 
   let pr_assumption_token many discharge kind =
     match discharge, kind with
-      | (NoDischarge,Logical) ->
+      | (NoDischarge,Decls.Logical) ->
         keyword (if many then "Axioms" else "Axiom")
-      | (NoDischarge,Definitional) ->
+      | (NoDischarge,Decls.Definitional) ->
         keyword (if many then "Parameters" else "Parameter")
-      | (NoDischarge,Conjectural) -> str"Conjecture"
-      | (DoDischarge,Logical) ->
+      | (NoDischarge,Decls.Conjectural) -> str"Conjecture"
+      | (DoDischarge,Decls.Logical) ->
         keyword (if many then "Hypotheses" else "Hypothesis")
-      | (DoDischarge,Definitional) ->
+      | (DoDischarge,Decls.Definitional) ->
         keyword (if many then "Variables" else "Variable")
-      | (DoDischarge,Conjectural) ->
+      | (DoDischarge,Decls.Conjectural) ->
         anomaly (Pp.str "Don't know how to beautify a local conjecture.")
+      | (_,Decls.Context) ->
+        anomaly (Pp.str "Context is used only internally.")
 
   let pr_params pr_c (xl,(c,t)) =
     hov 2 (prlist_with_sep sep pr_lident xl ++ spc() ++
@@ -370,7 +371,7 @@ open Pputils
     | (c,(idl,t))::l ->
       match factorize l with
         | (xl,((c', t') as r))::l'
-            when (c : bool) == c' && Pervasives.(=) t t' ->
+            when (c : bool) == c' && (=) t t' ->
           (* FIXME: we need equality on constr_expr *)
           (idl@xl,r)::l'
         | l' -> (idl,(c,t))::l'
@@ -386,7 +387,16 @@ open Pputils
   prlist_with_sep pr_semicolon (pr_params pr_c)
 *)
 
-  let pr_thm_token k = keyword (Kindops.string_of_theorem_kind k)
+let string_of_theorem_kind = let open Decls in function
+  | Theorem -> "Theorem"
+  | Lemma -> "Lemma"
+  | Fact -> "Fact"
+  | Remark -> "Remark"
+  | Property -> "Property"
+  | Proposition -> "Proposition"
+  | Corollary -> "Corollary"
+
+  let pr_thm_token k = keyword (string_of_theorem_kind k)
 
   let pr_syntax_modifier = let open Gramlib.Gramext in function
     | SetItemLevel (l,bko,n) ->
@@ -409,15 +419,15 @@ open Pputils
     | l -> spc() ++
       hov 1 (str"(" ++ prlist_with_sep sep_v2 pr_syntax_modifier l ++ str")")
 
-  let pr_rec_definition ((iddecl,ro,bl,type_,def),ntn) =
+  let pr_rec_definition { fname; univs; rec_order; binders; rtype; body_def; notations } =
     let env = Global.env () in
     let sigma = Evd.from_env env in
     let pr_pure_lconstr c = Flags.without_option Flags.beautify pr_lconstr c in
-    let annot = pr_guard_annot (pr_lconstr_expr env sigma) bl ro in
-    pr_ident_decl iddecl ++ pr_binders_arg bl ++ annot
-    ++ pr_type_option (fun c -> spc() ++ pr_lconstr_expr env sigma c) type_
-    ++ pr_opt (fun def -> str":=" ++ brk(1,2) ++ pr_pure_lconstr env sigma def) def
-    ++ prlist (pr_decl_notation @@ pr_constr env sigma) ntn
+    let annot = pr_guard_annot (pr_lconstr_expr env sigma) binders rec_order in
+    pr_ident_decl (fname,univs) ++ pr_binders_arg binders ++ annot
+    ++ pr_type_option (fun c -> spc() ++ pr_lconstr_expr env sigma c) rtype
+    ++ pr_opt (fun def -> str":=" ++ brk(1,2) ++ pr_pure_lconstr env sigma def) body_def
+    ++ prlist (pr_decl_notation @@ pr_constr env sigma) notations
 
   let pr_statement head (idpl,(bl,c)) =
     let env = Global.env () in
@@ -504,6 +514,8 @@ open Pputils
       ++ pr_class_rawexpr t
     | PrintCanonicalConversions ->
       keyword "Print Canonical Structures"
+    | PrintTypingFlags ->
+      keyword "Print Typing Flags"
     | PrintTables ->
       keyword "Print Tables"
     | PrintHintGoal ->
@@ -586,6 +598,18 @@ open Pputils
     with Not_found ->
       hov 1 (str "TODO(" ++ str (fst s) ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
 
+
+let string_of_definition_object_kind = let open Decls in function
+  | Definition -> "Definition"
+  | Example -> "Example"
+  | Coercion -> "Coercion"
+  | SubClass -> "SubClass"
+  | CanonicalStructure -> "Canonical Structure"
+  | Instance -> "Instance"
+  | Let -> "Let"
+  | (StructureComponent|Scheme|CoFixpoint|Fixpoint|IdentityCoercion|Method) ->
+    CErrors.anomaly (Pp.str "Internal definition kind.")
+
   let pr_vernac_expr v =
     let return = tag_vernac v in
     let env = Global.env () in
@@ -647,8 +671,6 @@ open Pputils
         return (
           if Int.equal i 1 then keyword "Back" else keyword "Back" ++ pr_intarg i
         )
-      | VernacBackTo i ->
-        return (keyword "BackTo" ++ pr_intarg i)
 
     (* State management *)
       | VernacWriteState s ->
@@ -717,7 +739,7 @@ open Pputils
           keyword (
             if Name.is_anonymous (fst id).v
             then "Goal"
-            else Kindops.string_of_definition_object_kind dk)
+            else string_of_definition_object_kind dk)
         in
         let pr_reduce = function
           | None -> mt()
@@ -836,11 +858,11 @@ open Pputils
           | DoDischarge -> keyword "Let" ++ spc ()
           | NoDischarge -> str ""
         in
-        let pr_onecorec ((iddecl,bl,c,def),ntn) =
-          pr_ident_decl iddecl ++ spc() ++ pr_binders env sigma bl ++ spc() ++ str":" ++
-            spc() ++ pr_lconstr_expr env sigma c ++
-            pr_opt (fun def -> str":=" ++ brk(1,2) ++ pr_lconstr env sigma def) def ++
-            prlist (pr_decl_notation @@ pr_constr env sigma) ntn
+        let pr_onecorec {fname; univs; binders; rtype; body_def; notations } =
+          pr_ident_decl (fname,univs) ++ spc() ++ pr_binders env sigma binders ++ spc() ++ str":" ++
+            spc() ++ pr_lconstr_expr env sigma rtype ++
+            pr_opt (fun def -> str":=" ++ brk(1,2) ++ pr_lconstr env sigma def) body_def ++
+            prlist (pr_decl_notation @@ pr_constr env sigma) notations
         in
         return (
           hov 0 (local ++ keyword "CoFixpoint" ++ spc() ++
@@ -1246,6 +1268,16 @@ open Pputils
       | VernacEndSubproof ->
         return (str "}")
 
+let pr_control_flag (p : control_flag) =
+  let w = match p with
+    | ControlTime _ -> keyword "Time"
+    | ControlRedirect s -> keyword "Redirect" ++ spc() ++ qs s
+    | ControlTimeout n -> keyword "Timeout " ++ int n
+    | ControlFail -> keyword "Fail" in
+  w ++ spc ()
+
+let pr_vernac_control flags = Pp.prlist pr_control_flag flags
+
 let rec pr_vernac_flag (k, v) =
   let k = keyword k in
   let open Attributes in
@@ -1261,19 +1293,11 @@ let pr_vernac_attributes =
   | [] -> mt ()
   | flags ->  str "#[" ++ pr_vernac_flags flags ++ str "]" ++ cut ()
 
-  let rec pr_vernac_control v =
-    let return = tag_vernac v in
-    match v.v with
-    | VernacExpr (f, v') -> pr_vernac_attributes f ++ pr_vernac_expr v' ++ sep_end v'
-    | VernacTime (_,v) ->
-      return (keyword "Time" ++ spc() ++ pr_vernac_control v)
-    | VernacRedirect (s, v) ->
-      return (keyword "Redirect" ++ spc() ++ qs s ++ spc() ++ pr_vernac_control v)
-    | VernacTimeout(n,v) ->
-      return (keyword "Timeout " ++ int n ++ spc() ++ pr_vernac_control v)
-    | VernacFail v->
-      return (keyword "Fail" ++ spc() ++ pr_vernac_control v)
-
-    let pr_vernac v =
-      try pr_vernac_control v
-      with e -> CErrors.print e
+let pr_vernac ({v = {control; attrs; expr}} as v) =
+  try
+    tag_vernac v
+      (pr_vernac_control control ++
+       pr_vernac_attributes attrs ++
+       pr_vernac_expr expr ++
+       sep_end expr)
+  with e -> CErrors.print e

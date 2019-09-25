@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -26,7 +26,7 @@ module AdaptorDb = struct
 
   module AdaptorKind = struct
     type t = kind
-    let compare = Pervasives.compare
+    let compare = pervasives_compare
   end
   module AdaptorMap = Map.Make(AdaptorKind)
 

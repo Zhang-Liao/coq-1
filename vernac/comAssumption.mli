@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -11,37 +11,41 @@
 open Names
 open Vernacexpr
 open Constrexpr
-open Decl_kinds
 
 (** {6 Parameters/Assumptions} *)
 
 val do_assumptions
-  : program_mode:bool
-  -> locality * polymorphic * assumption_object_kind
+  :  program_mode:bool
+  -> poly:bool
+  -> scope:DeclareDef.locality
+  -> kind:Decls.assumption_object_kind
   -> Declaremods.inline
   -> (ident_decl list * constr_expr) with_coercion list
-  -> bool
+  -> unit
 
 (** returns [false] if the assumption is neither local to a section,
     nor in a module type and meant to be instantiated. *)
 val declare_assumption
   : coercion_flag
-  -> assumption_kind
-  -> Constr.types Entries.in_universes_entry
+  -> poly:bool
+  -> scope:DeclareDef.locality
+  -> kind:Decls.assumption_object_kind
+  -> Constr.types
+  -> Entries.universes_entry
   -> UnivNames.universe_binders
   -> Impargs.manual_implicits
-  -> bool (** implicit *)
+  -> Glob_term.binding_kind
   -> Declaremods.inline
   -> variable CAst.t
-  -> GlobRef.t * Univ.Instance.t * bool
+  -> GlobRef.t * Univ.Instance.t
 
 (** Context command *)
 
 (** returns [false] if, for lack of section, it declares an assumption
     (unless in a module type). *)
 val context
-  : Decl_kinds.polymorphic
+  :  poly:bool
   -> local_binder_expr list
-  -> bool
+  -> unit
 
 val do_primitive : lident -> CPrimitives.op_or_type -> constr_expr option -> unit

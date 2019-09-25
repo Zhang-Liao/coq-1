@@ -1,6 +1,6 @@
 ##########################################################################
 ##         #   The Coq Proof Assistant / The Coq Development Team       ##
-##  v      #   INRIA, CNRS and contributors - Copyright 1999-2018       ##
+##  v      #   INRIA, CNRS and contributors - Copyright 1999-2019       ##
 ## <O___,, #       (see CREDITS file for the list of authors)           ##
 ##   \VV/  ###############################################################
 ##    //   #    This file is distributed under the terms of the         ##
@@ -97,7 +97,7 @@ COMPLEXITY := $(if $(bogomips),complexity)
 BUGS := bugs/opened bugs/closed
 INTERACTIVE := interactive
 UNIT_TESTS := unit-tests
-VSUBSYSTEMS := prerequisite success failure $(BUGS) output \
+VSUBSYSTEMS := prerequisite success failure $(BUGS) output output-coqtop \
   output-modulo-time $(INTERACTIVE) micromega $(COMPLEXITY) modules stm \
   coqdoc ssr arithmetic ltac2
 
@@ -164,6 +164,7 @@ summary:
 	  $(call summary_dir, "Failure tests", failure); \
 	  $(call summary_dir, "Bugs tests", bugs); \
 	  $(call summary_dir, "Output tests", output); \
+	  $(call summary_dir, "Output tests with coqtop", output-coqtop); \
 	  $(call summary_dir, "Output (modulo time changes) tests", output-modulo-time); \
 	  $(call summary_dir, "Interactive tests", interactive); \
 	  $(call summary_dir, "Micromega tests", micromega); \
@@ -299,6 +300,11 @@ unit-tests/%.ml.log: unit-tests/%.ml unit-tests/src/$(UNIT_LINK)
 	$(HIDE)$(OCAMLBEST) -linkall -linkpkg -package coq.toplevel,oUnit \
 	     -I unit-tests/src $(UNIT_LINK) $< -o $<.test;
 	$(HIDE)./$<.test
+unit-tests/ide/%.ml.log: unit-tests/ide/%.ml unit-tests/src/$(UNIT_LINK)
+	$(SHOW) 'TEST      $<'
+	$(HIDE)$(OCAMLBEST) -linkall -linkpkg -package coq.ide,oUnit \
+	     -I unit-tests/src $(UNIT_LINK) $< -o $<.test;
+	$(HIDE)./$<.test
 
 #######################################################################
 # Other generic tests
@@ -335,16 +341,16 @@ $(addsuffix .log,$(wildcard ssr/*.v success/*.v micromega/*.v modules/*.v arithm
 	    $(FAIL); \
 	  fi; \
 	} > "$@"
-	@echo "CHECK     $<"
-	$(HIDE){ \
-    opts="$(if $(findstring modules/,$<),-R modules Mods -norec Mods.$(shell basename $< .v),-I $(shell dirname $<) -norec $(shell basename $< .v))"; \
+	@if ! grep -q -F "Error!" $@; then echo "CHECK     $<"; fi
+	$(HIDE)if ! grep -q -F "Error!" $@; then { \
+	opts="$(if $(findstring modules/,$<),-R modules Mods -norec Mods.$(shell basename $< .v),-I $(shell dirname $<) -norec $(shell basename $< .v))"; \
 	  $(coqchk) -silent $(call get_set_impredicativity,$<) $$opts 2>&1; R=$$?; \
 	  if [ $$R != 0 ]; then \
 	    echo $(log_failure); \
 	    echo "    $<...could not be checked (Error!)" ; \
 	    $(FAIL); \
 	  fi; \
-	} > "$(shell dirname $<)/$(shell basename $< .v).chk.log"
+	} > "$(shell dirname $<)/$(shell basename $< .v).chk.log"; fi
 
 stm: $(wildcard stm/*.v:%.v=%.v.log)
 $(addsuffix .log,$(wildcard stm/*.v)): %.v.log: %.v
@@ -362,15 +368,15 @@ $(addsuffix .log,$(wildcard stm/*.v)): %.v.log: %.v
 	    $(FAIL); \
 	  fi; \
 	} > "$@"
-	@echo "CHECK     $<"
-	$(HIDE){ \
+	@if ! grep -q -F "Error!" $@; then echo "CHECK     $<"; fi
+	$(HIDE)if ! grep -q -F "Error!" $@; then { \
 	  $(coqchk) -silent -I $(shell dirname $<) -norec $(shell basename $< .v) 2>&1; R=$$?; \
 	  if [ $$R != 0 ]; then \
 	    echo $(log_failure); \
 	    echo "    $<...could not be checked (Error!)" ; \
 	    $(FAIL); \
 	  fi; \
-	} > "$(shell dirname $<)/$(shell basename $< .v).chk.log"
+	} > "$(shell dirname $<)/$(shell basename $< .v).chk.log"; fi
 
 $(addsuffix .log,$(wildcard failure/*.v)): %.v.log: %.v $(PREREQUISITELOG)
 	@echo "TEST      $< $(call get_coq_prog_args_in_parens,"$<")"
@@ -386,15 +392,15 @@ $(addsuffix .log,$(wildcard failure/*.v)): %.v.log: %.v $(PREREQUISITELOG)
 	    $(FAIL); \
 	  fi; \
 	} > "$@"
-	@echo "CHECK     $<"
-	$(HIDE){ \
+	@if ! grep -q -F "Error!" $@; then echo "CHECK     $<"; fi
+	$(HIDE)if ! grep -q -F "Error!" $@; then { \
 	  $(coqchk) -silent -I $(shell dirname $<) -norec $(shell basename $< .v) 2>&1; R=$$?; \
 	  if [ $$R != 0 ]; then \
 	    echo $(log_failure); \
 	    echo "    $<...could not be checked (Error!)" ; \
 	    $(FAIL); \
 	  fi; \
-	} > "$(shell dirname $<)/$(shell basename $< .v).chk.log"
+	} > "$(shell dirname $<)/$(shell basename $< .v).chk.log"; fi
 
 $(addsuffix .log,$(wildcard output/*.v)): %.v.log: %.v %.out $(PREREQUISITELOG)
 	@echo "TEST      $< $(call get_coq_prog_args_in_parens,"$<")"
@@ -420,8 +426,32 @@ $(addsuffix .log,$(wildcard output/*.v)): %.v.log: %.v %.out $(PREREQUISITELOG)
 	  fi; \
 	} > "$@"
 
+$(addsuffix .log,$(wildcard output-coqtop/*.v)): %.v.log: %.v %.out $(PREREQUISITELOG)
+	@echo "TEST      $< $(call get_coq_prog_args_in_parens,"$<")"
+	$(HIDE){ \
+	  echo $(call log_intro,$<); \
+	  output=$*.out.real; \
+	  $(coqtop) < "$<" $(call get_coq_prog_args,"$<") 2>&1 \
+	    | grep -v "Welcome to Coq" \
+	    | grep -v "\[Loading ML file" \
+	    | grep -v "Skipping rcfile loading" \
+	    | grep -v "^<W>" \
+	    | sed 's/File "[^"]*"/File "stdin"/' \
+	    > $$output; \
+	  diff -u --strip-trailing-cr $*.out $$output 2>&1; R=$$?; times; \
+	  if [ $$R = 0 ]; then \
+	    echo $(log_success); \
+	    echo "    $<...Ok"; \
+	    rm $$output; \
+	  else \
+	    echo $(log_failure); \
+	    echo "    $<...Error! (unexpected output)"; \
+	    $(FAIL); \
+	  fi; \
+	} > "$@"
+
 .PHONY: approve-output
-approve-output: output
+approve-output: output output-coqtop
 	$(HIDE)for f in output/*.out.real; do \
 	  mv "$$f" "$${f%.real}"; \
 	  echo "Updated $${f%.real}!"; \

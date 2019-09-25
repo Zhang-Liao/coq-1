@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -43,15 +43,11 @@ end
 
 (** Definitions for some standard attributes. *)
 
-type deprecation = { since : string option ; note : string option }
-
-val mk_deprecation : ?since: string option -> ?note: string option -> unit -> deprecation
-
 val polymorphic : bool attribute
 val program : bool attribute
 val template : bool option attribute
 val locality : bool option attribute
-val deprecation : deprecation option attribute
+val deprecation : Deprecation.t option attribute
 val canonical : bool attribute
 
 val program_mode_option_name : string list

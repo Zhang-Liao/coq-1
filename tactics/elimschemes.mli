@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -18,7 +18,7 @@ val optimize_non_type_induction_scheme :
   Sorts.family ->
   'b ->
   Names.inductive ->
-  (Constr.constr * UState.t) * Safe_typing.private_constants
+  (Constr.constr * UState.t) * Evd.side_effects
 
 val rect_scheme_kind_from_prop : individual scheme_kind
 val ind_scheme_kind_from_prop : individual scheme_kind
@@ -33,6 +33,7 @@ val sind_dep_scheme_kind_from_type : individual scheme_kind
 val rec_scheme_kind_from_type : individual scheme_kind
 val rec_dep_scheme_kind_from_type : individual scheme_kind
 
+val nondep_elim_scheme : Sorts.family -> Sorts.family -> individual scheme_kind
 
 (** Case analysis schemes *)
 

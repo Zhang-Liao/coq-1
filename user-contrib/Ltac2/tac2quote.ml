@@ -1,9 +1,11 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 open Pp
@@ -94,8 +96,14 @@ let of_anti f = function
 
 let of_ident {loc;v=id} = inj_wit ?loc wit_ident id
 
-let of_constr c =
+let of_constr ?delimiters c =
   let loc = Constrexpr_ops.constr_loc c in
+  let c = Option.cata
+      (List.fold_left (fun c d ->
+           CAst.make ?loc @@ Constrexpr.CDelimiters(Id.to_string d, c))
+          c)
+      c delimiters
+  in
   inj_wit ?loc wit_constr c
 
 let of_open_constr c =

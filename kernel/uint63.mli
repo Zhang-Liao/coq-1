@@ -1,3 +1,13 @@
+(************************************************************************)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
+(*   \VV/  **************************************************************)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
+(************************************************************************)
+
 type t
 
 val uint_size : int
@@ -37,6 +47,8 @@ val mul     : t -> t -> t
 val div     : t -> t -> t
 val rem     : t -> t -> t
 
+val diveucl : t -> t -> t * t
+
       (* Specific arithmetic operations *)
 val mulc    : t -> t -> t * t
 val addmuldiv : t -> t -> t -> t
@@ -57,3 +69,13 @@ val head0   : t -> t
 val tail0   : t -> t
 
 val is_uint63 : Obj.t -> bool
+
+(* Arithmetic with explicit carries *)
+
+(* Analog of Numbers.Abstract.Cyclic.carry *)
+type 'a carry = C0 of 'a | C1 of 'a
+
+val addc : t -> t -> t carry
+val addcarryc : t -> t -> t carry
+val subc : t -> t -> t carry
+val subcarryc : t -> t -> t carry

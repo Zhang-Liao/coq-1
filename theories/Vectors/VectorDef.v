@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -189,6 +189,16 @@ Fixpoint append {A}{n}{p} (v:t A n) (w:t A p):t A (n+p) :=
 
 Infix "++" := append.
 
+(** Split a vector into two parts *)
+Fixpoint splitat {A} (l : nat) {r : nat} :
+  t A (l + r) -> t A l * t A r :=
+  match l with
+  | 0 => fun v => ([], v)
+  | S l' => fun v =>
+    let (v1, v2) := splitat l' (tl v) in
+    (hd v::v1, v2)
+  end.
+
 (** Two definitions of the tail recursive function that appends two lists but
 reverses the first one *)
 
@@ -217,8 +227,7 @@ End BASES.
 Local Notation "v [@ p ]" := (nth v p) (at level 1).
 
 Section ITERATORS.
-(** * Here are special non dependent useful instantiation of induction
-schemes *)
+(** * Here are special non dependent useful instantiation of induction schemes *)
 
 (** Uniform application on the arguments of the vector *)
 Definition map {A} {B} (f : A -> B) : forall {n} (v:t A n), t B n :=

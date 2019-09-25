@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -53,8 +53,14 @@ module StrSet = Set.Make(StrMod)
 let dirmap = ref StrMap.empty
 
 let make_dir_table dir =
+  let entries =
+    try
+      Sys.readdir dir
+    with Sys_error _ ->
+      warn_cannot_open_dir dir;
+      [||] in
   let filter_dotfiles s f = if f.[0] = '.' then s else StrSet.add f s in
-  Array.fold_left filter_dotfiles StrSet.empty (Sys.readdir dir)
+  Array.fold_left filter_dotfiles StrSet.empty entries
 
 (** Don't trust in interactive mode (the default) *)
 let trust_file_cache = ref false
@@ -294,13 +300,13 @@ let with_time ~batch ~header f x =
     let y = f x in
     let tend = get_time() in
     let msg2 = if batch then "" else " (successful)" in
-    Feedback.msg_info (header ++ str msg ++ fmt_time_difference tstart tend ++ str msg2);
+    Feedback.msg_notice (header ++ str msg ++ fmt_time_difference tstart tend ++ str msg2);
     y
   with e ->
     let tend = get_time() in
     let msg = if batch then "" else "Finished failing transaction in " in
     let msg2 = if batch then "" else " (failure)" in
-    Feedback.msg_info (header ++ str msg ++ fmt_time_difference tstart tend ++ str msg2);
+    Feedback.msg_notice (header ++ str msg ++ fmt_time_difference tstart tend ++ str msg2);
     raise e
 
 (* We use argv.[0] as we don't want to resolve symlinks *)

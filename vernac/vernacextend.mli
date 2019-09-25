@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -32,7 +32,11 @@ type vernac_keep_as = VtKeepAxiom | VtKeepDefined | VtKeepOpaque
 
 type vernac_qed_type = VtKeep of vernac_keep_as | VtDrop
 
-type vernac_type =
+type vernac_when =
+  | VtNow
+  | VtLater
+
+type vernac_classification =
   (* Start of a proof *)
   | VtStartProof of vernac_start
   (* Command altering the global state, bad for parallel
@@ -53,7 +57,7 @@ type vernac_type =
   (* To be removed *)
   | VtMeta
 and vernac_start = opacity_guarantee * Names.Id.t list
-and vernac_sideff_type = Names.Id.t list
+and vernac_sideff_type = Names.Id.t list * vernac_when
 and opacity_guarantee =
   | GuaranteesOpacity (** Only generates opaque terms at [Qed] *)
   | Doesn'tGuaranteeOpacity (** May generate transparent terms even with [Qed].*)
@@ -64,18 +68,13 @@ and anon_abstracting_tac = bool (** abstracting anonymously its result *)
 
 and proof_block_name = string (** open type of delimiters *)
 
-type vernac_when =
-  | VtNow
-  | VtLater
-type vernac_classification = vernac_type * vernac_when
-
 (** Interpretation of extended vernac phrases. *)
 
 type typed_vernac =
   | VtDefault of (unit -> unit)
   | VtNoProof of (unit -> unit)
-  | VtCloseProof of (pstate:Proof_global.t -> unit)
-  | VtOpenProof of (unit -> Proof_global.t)
+  | VtCloseProof of (lemma:Lemmas.t -> unit)
+  | VtOpenProof of (unit -> Lemmas.t)
   | VtModifyProof of (pstate:Proof_global.t -> Proof_global.t)
   | VtReadProofOpt of (pstate:Proof_global.t option -> unit)
   | VtReadProof of (pstate:Proof_global.t -> unit)

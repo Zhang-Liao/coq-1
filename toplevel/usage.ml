@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -8,20 +8,16 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-let version ret =
+let version () =
   Printf.printf "The Coq Proof Assistant, version %s (%s)\n"
     Coq_config.version Coq_config.date;
-  Printf.printf "compiled on %s with OCaml %s\n" Coq_config.compile_date Coq_config.caml_version;
-  exit ret
-let machine_readable_version ret =
+  Printf.printf "compiled on %s with OCaml %s\n" Coq_config.compile_date Coq_config.caml_version
+
+let machine_readable_version () =
   Printf.printf "%s %s\n"
-    Coq_config.version Coq_config.caml_version;
-  exit ret
+    Coq_config.version Coq_config.caml_version
 
 (* print the usage of coqtop (or coqc) on channel co *)
-
-let extra_usage = ref []
-let add_to_usage name text = extra_usage := (name,text) :: !extra_usage
 
 let print_usage_common co command =
   output_string co command;
@@ -44,10 +40,23 @@ let print_usage_common co command =
 \n  -load-ml-source f      load ML file f\
 \n  -load-vernac-source f  load Coq file f.v (Load \"f\".)\
 \n  -l f                   (idem)\
-\n  -require path          load Coq library path and import it (Require Import path.)\
 \n  -load-vernac-source-verbose f  load Coq file f.v (Load Verbose \"f\".)\
 \n  -lv f	           (idem)\
-\n  -load-vernac-object path  load Coq library path (Require path)\
+\n  -load-vernac-object lib, -r lib\
+\n                         load Coq library lib (Require lib)\
+\n  -rfrom root lib        load Coq library lib (From root Require lib.)\
+\n  -require-import lib, -ri lib\
+\n                         load and import Coq library lib\
+\n                         (equivalent to Require Import lib.)\
+\n  -require-export lib, -re lib\
+\n                         load and transitively import Coq library lib\
+\n                         (equivalent to Require Export lib.)\
+\n  -require-import-from root lib, -rifrom lib\
+\n                         load and import Coq library lib\
+\n                         (equivalent to From root Require Import lib.)\
+\n  -require-export-from root lib, -refrom lib\
+\n                         load and transitively import Coq library lib\
+\n                         (equivalent to From root Require Export lib.)\
 \n\
 \n  -where                 print Coq's standard library location and exit\
 \n  -config, --config      print Coq's configuration information and exit\
@@ -73,6 +82,7 @@ let print_usage_common co command =
 \n  -sprop-cumulative      make sort SProp cumulative with the rest of the hierarchy\
 \n  -indices-matter        levels of indices (and nonuniform parameters) contribute to the level of inductives\
 \n  -type-in-type          disable universe consistency checking\
+\n  -no-template-check     disable checking of universes constraints on universes parameterizing template polymorphic inductive types\
 \n  -mangle-names x        mangle auto-generated names using prefix x\
 \n  -set \"Foo Bar\"         enable Foo Bar (as Set Foo Bar. in a file)\
 \n  -set \"Foo Bar=value\"   set Foo Bar to value (value is interpreted according to Foo Bar's type)\
@@ -86,42 +96,16 @@ let print_usage_common co command =
 \n  -bytecode-compiler (yes|no)        enable the vm_compute reduction machine\
 \n  -native-compiler (yes|no|ondemand) enable the native_compute reduction machine\
 \n  -h, -help, --help      print this list of options\
-\n";
-  List.iter (fun (name, text) ->
-    output_string co
-     ("\nWith the flag '-toploop "^name^
-        "' these extra option are also available:\n"^
-      text^"\n"))
-    !extra_usage
+\n"
 
-(* print the usage on standard error *)
+(* print the usage *)
 
-let print_usage_coqtop () =
-  print_usage_common stderr "Usage: coqtop <options>\n\n";
-  output_string stderr "\n\
-coqtop specific options:\
-\n\
-\n  -batch                 batch mode (exits just after argument parsing)\
-\n";
-  flush stderr ;
-  exit 1
+type specific_usage = {
+  executable_name : string;
+  extra_args : string;
+  extra_options : string;
+}
 
-let print_usage_coqc () =
-  print_usage_common stderr "Usage: coqc <options> <Coq options> file...\n\n";
-  output_string stderr "\n\
-coqc specific options:\
-\n\
-\n  -o f.vo                use f.vo as the output file name\
-\n  -verbose               compile and output the input file\
-\n  -quick                 quickly compile .v files to .vio files (skip proofs)\
-\n  -schedule-vio2vo j f1..fn   run up to j instances of Coq to turn each fi.vio\
-\n                         into fi.vo\
-\n  -schedule-vio-checking j f1..fn   run up to j instances of Coq to check all\
-\n                         proofs in each fi.vio\
-\n\
-\nUndocumented:\
-\n  -vio2vo                [see manual]\
-\n  -check-vio-tasks       [see manual]\
-\n";
-  flush stderr ;
-  exit 1
+let print_usage co { executable_name; extra_args; extra_options } =
+  print_usage_common co ("Usage: " ^ executable_name ^ " <options> " ^ extra_args ^ "\n\n");
+  output_string co extra_options

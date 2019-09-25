@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -102,6 +102,22 @@ val ident_subst_function : substitution * 'a -> 'a
    functions for dynamically typed library-objects. *)
 
 type obj
+
+type algebraic_objects =
+  | Objs of objects
+  | Ref of Names.ModPath.t * Mod_subst.substitution
+
+and t =
+  | ModuleObject of substitutive_objects
+  | ModuleTypeObject of substitutive_objects
+  | IncludeObject of algebraic_objects
+  | KeepObject of objects
+  | ExportObject of { mpl : Names.ModPath.t list }
+  | AtomicObject of obj
+
+and objects = (Names.Id.t * t) list
+
+and substitutive_objects = Names.MBId.t list * algebraic_objects
 
 val declare_object_full :
   'a object_declaration -> ('a -> obj) * (obj -> 'a)

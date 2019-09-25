@@ -104,7 +104,8 @@ cd /build
 mkdir -p "$SOURCE_LOCAL_CACHE_CFMT"
 
 # sysroot prefix for the above /build/host/target combination
-PREFIX=$CYGWIN_INSTALLDIR_MFMT/usr/$TARGET_ARCH/sys-root/mingw
+# This must be in MFMT (C:/.../) because the OCaml library path is based on it and OCaml is a MinGW application.
+PREFIXMINGW=$CYGWIN_INSTALLDIR_MFMT/usr/$TARGET_ARCH/sys-root/mingw
 
 # Install / Prefix folder for COQ
 PREFIXCOQ=$RESULT_INSTALLDIR_MFMT
@@ -113,10 +114,10 @@ PREFIXCOQ=$RESULT_INSTALLDIR_MFMT
 if [ "$INSTALLOCAML" == "Y" ]; then
   PREFIXOCAML=$PREFIXCOQ
 else
-  PREFIXOCAML=$PREFIX
+  PREFIXOCAML=$PREFIXMINGW
 fi
 
-mkdir -p "$PREFIX/bin"
+mkdir -p "$PREFIXMINGW/bin"
 mkdir -p "$PREFIXCOQ/bin"
 mkdir -p "$PREFIXOCAML/bin"
 
@@ -314,7 +315,7 @@ function get_expand_source_tar {
       find "$(ls)" -mindepth 1 -maxdepth 1 -exec mv -- "{}" . \;
     else
       echo "Unzip strip count not supported"
-      return 1
+      exit 1
     fi
   else
     logn untar tar xvaf "$TARBALLS/$name.$3" --strip $strip
@@ -322,10 +323,11 @@ function get_expand_source_tar {
 
   # Patch if patch file exists
   # First try specific patch file name then generic patch file name
+  # Note: set -o errexit does not work inside a function called in an if, so exit explicity.
   if [ -f "$PATCHES/$name.patch" ] ; then
-    log1 patch -p1 -i "$PATCHES/$name.patch"
+    log1 patch -p1 -i "$PATCHES/$name.patch" || exit 1
   elif  [ -f "$PATCHES/$basename.patch" ] ; then
-    log1 patch -p1 -i "$PATCHES/$basename.patch"
+    log1 patch -p1 -i "$PATCHES/$basename.patch" || exit 1
   fi
 
   # Go back to base folder
@@ -487,7 +489,7 @@ function build_post {
 function build_conf_make_inst {
   if build_prep "$1" "$2" "$3" ; then
     $4
-    logn configure ./configure --build="$BUILD" --host="$HOST" --target="$TARGET" --prefix="$PREFIX" "${@:5}"
+    logn configure ./configure --build="$BUILD" --host="$HOST" --target="$TARGET" --prefix="$PREFIXMINGW" "${@:5}"
     # shellcheck disable=SC2086
     log1 make $MAKE_OPT
     log2 make install
@@ -895,9 +897,9 @@ function make_libxml2 {
   # Note: latest release version 2.9.2 fails during configuring lzma, so using 2.9.1
   # Note: python binding requires <sys/select.h> which doesn't exist on cygwin
   if build_prep https://git.gnome.org/browse/libxml2/snapshot  libxml2-2.9.1  tar.xz ; then
-    # ./autogen.sh --build=$BUILD --host=$HOST --target=$TARGET --prefix="$PREFIX" --disable-shared --without-python
+    # ./autogen.sh --build=$BUILD --host=$HOST --target=$TARGET --prefix="$PREFIXMINGW" --disable-shared --without-python
     # shared library required by gtksourceview
-    ./autogen.sh --build="$BUILD" --host="$HOST" --target="$TARGET" --prefix="$PREFIX" --without-python
+    ./autogen.sh --build="$BUILD" --host="$HOST" --target="$TARGET" --prefix="$PREFIXMINGW" --without-python
     # shellcheck disable=SC2086
     log1 make $MAKE_OPT all
     log2 make install
@@ -910,14 +912,13 @@ function make_libxml2 {
 
 function make_gtk_sourceview3 {
   # Cygwin packet dependencies: intltool
-  # gtksourceview-2.11.2 requires GTK2
-  # gtksourceview-2.91.9 requires GTK3
-  # => We use gtksourceview-2.11.2 which seems to be the newest GTK2 based one
+  # Note: this is always built from sources cause of a bug in the cygwin delivery.
+  # Just dependencies are only built if we build from sources
   if [ "$GTK_FROM_SOURCES" == "Y" ]; then
     make_gtk3
     make_libxml2
-    build_conf_make_inst  https://download.gnome.org/sources/gtksourceview/3.24  gtksourceview-3.24.9  tar.bz2  true
   fi
+  build_conf_make_inst  https://download.gnome.org/sources/gtksourceview/3.24  gtksourceview-3.24.11  tar.xz  make_arch_pkg_config
 }
 
 ##### FLEXDLL FLEXLINK #####
@@ -930,7 +931,7 @@ function make_gtk_sourceview3 {
 # Install flexdll objects
 
 function install_flexdll {
-  cp flexdll.h "/usr/$TARGET_ARCH/sys-root/mingw/include"
+  cp flexdll.h "$PREFIXMINGW/include"
   if [ "$TARGET_ARCH" == "i686-w64-mingw32" ]; then
     cp flexdll*_mingw.o "/usr/$TARGET_ARCH/bin"
     cp flexdll*_mingw.o "$PREFIXOCAML/bin"
@@ -1131,7 +1132,7 @@ function make_findlib {
 function make_dune {
   make_ocaml
 
-  if build_prep https://github.com/ocaml/dune/archive/ 1.6.3 tar.gz 1 dune-1.6.3 ; then
+  if build_prep https://github.com/ocaml/dune/archive/ 1.10.0 tar.gz 1 dune-1.10.0 ; then
 
     log2 make release
     log2 make install
@@ -1146,10 +1147,34 @@ function make_menhir {
   make_ocaml
   make_findlib
   make_ocamlbuild
-  if build_prep http://gallium.inria.fr/~fpottier/menhir menhir-20180530 tar.gz 1 ; then
+  # This is the version required by latest CompCert
+  if build_prep https://gitlab.inria.fr/fpottier/menhir/-/archive/20190626 menhir-20190626 tar.gz 1 ; then
     # Note: menhir doesn't support -j 8, so don't pass MAKE_OPT
     log2 make all PREFIX="$PREFIXOCAML"
     log2 make install PREFIX="$PREFIXOCAML"
+    build_post
+  fi
+}
+
+##### CAMLP5 Ocaml Preprocessor #####
+
+function make_camlp5 {
+  make_ocaml
+  make_findlib
+
+  if build_prep https://github.com/camlp5/camlp5/archive rel707 tar.gz 1 camlp5-rel707; then
+    logn configure ./configure
+    # Somehow my virus scanner has the boot.new/SAVED directory locked after the move for a second => repeat until success
+    sed -i 's/mv boot.new boot/until mv boot.new boot; do sleep 1; done/' Makefile
+    # shellcheck disable=SC2086
+    log1 make world.opt $MAKE_OPT
+    log2 make install
+    log2 make clean
+    # For some reason META is not built / copied, but it is required
+    log2 make -C etc META
+    mkdir -p "$PREFIXOCAML/libocaml/site-lib/camlp5/"
+    cp etc/META "$PREFIXOCAML/libocaml/site-lib/camlp5/"
+    log2 make clean
     build_post
   fi
 }
@@ -1202,7 +1227,7 @@ function make_lablgtk {
 
 function copy_coq_dll {
   if [ "$INSTALLMODE" == "absolute" ] || [ "$INSTALLMODE" == "relocatable" ]; then
-    cp "/usr/${ARCH}-w64-mingw32/sys-root/mingw/bin/$1" "$PREFIXCOQ/bin/$1"
+    cp "$PREFIXMINGW/bin/$1" "$PREFIXCOQ/bin/$1"
   fi
 }
 
@@ -1282,27 +1307,58 @@ function copy_coq_objects {
 }
 
 # Copy required GTK config and support files
+# This must be called from inside the coq build folder!
 
 function copy_coq_gtk {
-  echo 'gtk-theme-name = "Default"'     >  "$PREFIX/etc/gtk-3.0/gtkrc"
-  echo 'gtk-fallback-icon-theme = "Tango"' >> "$PREFIX/etc/gtk-3.0/gtkrc"
+
+  glib-compile-schemas $PREFIXMINGW/share/glib-2.0/schemas/
+  echo 'gtk-theme-name = "Default"'     >  "$PREFIXMINGW/etc/gtk-3.0/gtkrc"
 
   if [ "$INSTALLMODE" == "absolute" ] || [ "$INSTALLMODE" == "relocatable" ]; then
-    install_glob "$PREFIX/etc/gtk-3.0" '*'                            "$PREFIXCOQ/gtk-3.0"
-    install_glob "$PREFIX/share/gtksourceview-3.0/language-specs" '*' "$PREFIXCOQ/share/gtksourceview-3.0/language-specs"
-    install_glob "$PREFIX/share/gtksourceview-3.0/styles" '*'         "$PREFIXCOQ/share/gtksourceview-3.0/styles"
-    install_rec  "$PREFIX/share/themes" '*'                           "$PREFIXCOQ/share/themes"
+    install_glob  "$PREFIXMINGW/etc/gtk-3.0" '*'                                 "$PREFIXCOQ/gtk-3.0"
+    install -D -T "$PREFIXMINGW/share/glib-2.0/schemas/gschemas.compiled"        "$PREFIXCOQ/share/glib-2.0/schemas/gschemas.compiled"
+
+    install_glob  "$PREFIXMINGW/share/gtksourceview-3.0/language-specs" '*'      "$PREFIXCOQ/share/gtksourceview-3.0/language-specs"
+    install -D -T "ide/coq.lang"                                                 "$PREFIXCOQ/share/gtksourceview-3.0/language-specs/coq.lang"
+    install -D -T "ide/coq-ssreflect.lang"                                       "$PREFIXCOQ/share/gtksourceview-3.0/language-specs/coq-ssreflect.lang"
+
+    install_glob  "$PREFIXMINGW/share/gtksourceview-3.0/styles" '*'              "$PREFIXCOQ/share/gtksourceview-3.0/styles"
+    install -D -T "ide/coq_style.xml"                                            "$PREFIXCOQ/share/gtksourceview-3.0/styles/coq_style.xml"
+
+    install_rec   "$PREFIXMINGW/share/themes" '*'                                "$PREFIXCOQ/share/themes"
+
+    FOLDERS=""
+    # The sizes include all default sizes given in index.theme
+    # The types used haven been recorded with ProcMon in an installation with all icons present
+    for SIZE in 16x16 22x22 32x32 48x48; do
+      for TYPE in \
+        actions/bookmark actions/document devices/drive actions/format-text actions/go actions/list \
+        actions/media actions/pan actions/process actions/system actions/window \
+        mimetypes/text places/folder places/user status/dialog
+      do
+        CLASS=$(dirname $TYPE)
+        ICON=$(basename $TYPE)
+        if [[ ! "$FOLDERS" =~ "$SIZE/$CLASS" ]] ;then
+          FOLDERS="$FOLDERS$SIZE/$CLASS,"
+        fi
+        install_rec "/usr/share/icons/Adwaita/$SIZE/$CLASS" "$ICON*"  "$PREFIXCOQ/share/icons/Adwaita/$SIZE/$CLASS"
+      done
+    done
+    echo Folders=$FOLDERS
+    install -D -T "/usr/share/icons/Adwaita/index.theme" "$PREFIXCOQ/share/icons/Adwaita/index.theme"
+    sed -i "s|^Directories=.*|Directories=$FOLDERS|" "$PREFIXCOQ/share/icons/Adwaita/index.theme"
+    gtk-update-icon-cache -f "$PREFIXCOQ/share/icons/Adwaita/"
 
     # This below item look like a bug in make install
-    if [ -d "$PREFIXCOQ/share/coq/" ] ; then
-      COQSHARE="$PREFIXCOQ/share/coq/"
-    else
-      COQSHARE="$PREFIXCOQ/share/"
-    fi
+    # if [ -d "$PREFIXCOQ/share/coq/" ] ; then
+    #   COQSHARE="$PREFIXCOQ/share/coq/"
+    # else
+    #   COQSHARE="$PREFIXCOQ/share/"
+    # fi
 
-    mkdir -p "$PREFIXCOQ/ide"
-    mv "$COQSHARE"*.png  "$PREFIXCOQ/ide"
-    rmdir "$PREFIXCOQ/share/coq" || true
+    # mkdir -p "$PREFIXCOQ/ide"
+    # mv "$COQSHARE"*.png  "$PREFIXCOQ/ide"
+    # rmdir "$PREFIXCOQ/share/coq" || true
   fi
 }
 
@@ -1454,7 +1510,7 @@ function make_gcc {
         --enable-languages=c --disable-nls \
         --disable-libsanitizer --disable-libssp --disable-libquadmath --disable-libgomp --disable-libvtv --disable-lto
         # --disable-decimal-float seems to be required
-        # --with-sysroot="$PREFIX"  results in configure error that this is not an absolute path
+        # --with-sysroot="$PREFIXMINGW"  results in configure error that this is not an absolute path
     # shellcheck disable=SC2086
     log1 make $MAKE_OPT
     log2 make install
@@ -1774,8 +1830,9 @@ function make_addon_coquelicot {
   installer_addon_dependency_beg coquelicot
   make_addon_ssreflect
   installer_addon_dependency_end
-  if build_prep_overlay Coquelicot; then
+  if build_prep_overlay coquelicot; then
     installer_addon_section coquelicot "Coquelicot" "Coq library for real analysis" ""
+    logn autogen ./autogen.sh
     logn configure ./configure --libdir="$PREFIXCOQ/lib/coq/user-contrib/Coquelicot"
     logn remake ./remake
     logn remake-install ./remake install
@@ -1832,6 +1889,84 @@ function make_addon_quickchick {
     installer_addon_section quickchick "QuickChick" "Coq plugin for randomized testing and counter example search" ""
     log1 make $MAKE_OPT
     log2 make install
+    build_post
+  fi
+}
+
+# Flocq: Floating point library
+
+function make_addon_flocq {
+  if build_prep_overlay Flocq; then
+    installer_addon_section flocq "Flocq" "Coq library for floating point arithmetic" ""
+    logn autogen ./autogen.sh
+    logn configure ./configure
+    logn remake ./remake --jobs=$MAKE_THREADS
+    logn install ./remake install
+    build_post
+  fi
+}
+
+# Coq-Interval: interval arithmetic and inequality proofs
+
+function make_addon_interval {
+  installer_addon_dependency_beg interval
+  make_addon_mathcomp
+  make_addon_coquelicot
+  make_addon_bignums
+  make_addon_flocq
+  installer_addon_dependency_end
+  if build_prep_overlay interval; then
+    installer_addon_section interval "Interval" "Coq library and tactic for proving real inequalities" ""
+    logn autogen ./autogen.sh
+    logn configure ./configure
+    logn remake ./remake --jobs=$MAKE_THREADS
+    logn install ./remake install
+    build_post
+  fi
+}
+
+# Gappa: Automatic generation of arithmetic proofs (mostly on limited precision arithmetic)
+
+function install_boost {
+  # The extra tar parameter extracts only the boost headers, not the boost library source code (which is huge and takes a long time)
+  if build_prep https://dl.bintray.com/boostorg/release/1.69.0/source boost_1_69_0 tar.gz 1 boost_1_69_0 boost boost_1_69_0/boost; then
+    # Move extracted boost folder where mingw-gcc can find it
+    mv boost /usr/$TARGET_ARCH/sys-root/mingw/include
+    build_post
+  fi
+}
+
+function copy_gappa_dlls {
+  copy_coq_dll LIBGMP-10.DLL
+  copy_coq_dll LIBMPFR-6.DLL
+  copy_coq_dll LIBSTDC++-6.DLL
+}
+
+function make_addon_gappa_tool {
+  install_boost
+  if build_prep_overlay gappa_tool; then
+    installer_addon_section gappa_tool "Gappa tool" "Stand alone tool for automated generation of numerical arithmetic proofs" ""
+    logn autogen ./autogen.sh
+    logn configure ./configure --build="$HOST" --host="$HOST" --target="$TARGET" --prefix="$PREFIXCOQ"
+    logn remake ./remake --jobs=$MAKE_THREADS
+    logn install ./remake -d install
+    log1 copy_gappa_dlls
+    build_post
+  fi
+}
+
+function make_addon_gappa {
+  make_camlp5
+  installer_addon_dependency_beg gappa
+  make_addon_gappa_tool
+  make_addon_flocq
+  installer_addon_dependency_end
+  if build_prep_overlay gappa_plugin ; then
+    installer_addon_section gappa "Gappa plugin" "Coq plugin for the Gappa tool" ""
+    logn autogen ./autogen.sh
+    logn configure ./configure
+    logn remake ./remake
+    logn install ./remake install
     build_post
   fi
 }

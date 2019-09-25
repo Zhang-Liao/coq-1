@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -121,7 +121,6 @@ Section MakeRingPol.
     - (Pinj i (Pc c)) is (Pc c)
  *)
 
- #[universes(template)]
  Inductive Pol : Type :=
   | Pc : C -> Pol
   | Pinj : positive -> Pol -> Pol
@@ -909,7 +908,6 @@ Section MakeRingPol.
 
  (** Definition of polynomial expressions *)
 
- #[universes(template)]
  Inductive PExpr : Type :=
   | PEO : PExpr
   | PEI : PExpr            

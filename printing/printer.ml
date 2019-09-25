@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,6 @@ open Names
 open Constr
 open Context
 open Environ
-open Globnames
 open Evd
 open Refiner
 open Constrextern
@@ -155,7 +154,7 @@ let pr_in_comment x = str "(* " ++ x ++ str " *)"
     the [mutual_inductive_body] for the inductives and constructors
     (needs an environment for this). *)
 
-let id_of_global env = function
+let id_of_global env = let open GlobRef in function
   | ConstRef kn -> Label.to_id (Constant.label kn)
   | IndRef (kn,0) -> Label.to_id (MutInd.label kn)
   | IndRef (kn,i) ->
@@ -170,7 +169,7 @@ let rec dirpath_of_mp = function
   | MPdot (mp,l) ->
     Libnames.add_dirpath_suffix (dirpath_of_mp mp) (Label.to_id l)
 
-let dirpath_of_global = function
+let dirpath_of_global = let open GlobRef in function
   | ConstRef kn -> dirpath_of_mp (Constant.modpath kn)
   | IndRef (kn,_) | ConstructRef ((kn,_),_) ->
     dirpath_of_mp (MutInd.modpath kn)
@@ -251,7 +250,7 @@ let pr_puniverses f env sigma (c,u) =
   then f env c ++ pr_universe_instance sigma u
   else f env c
 
-let pr_constant env cst = pr_global_env (Termops.vars_of_env env) (ConstRef cst)
+let pr_constant env cst = pr_global_env (Termops.vars_of_env env) (GlobRef.ConstRef cst)
 let pr_existential_key = Termops.pr_existential_key
 let pr_existential env sigma ev = pr_lconstr_env env sigma (mkEvar ev)
 let pr_inductive env ind = pr_lconstr_env env (Evd.from_env env) (mkInd ind)
@@ -826,10 +825,27 @@ let pr_nth_open_subgoal ~proof n =
 
 let pr_goal_by_id ~proof id =
   try
-    Proof.in_proof proof (fun sigma ->
-      let g = Evd.evar_key id sigma in
-      pr_selected_subgoal (pr_id id) sigma g)
+    let { Proof.sigma } = Proof.data proof in
+    let g = Evd.evar_key id sigma in
+    pr_selected_subgoal (pr_id id) sigma g
   with Not_found -> user_err Pp.(str "No such goal.")
+
+(** print a goal identified by the goal id as it appears in -emacs mode.
+    sid should be the Stm state id corresponding to proof.  Used to support
+    the Prooftree tool in Proof General. (https://askra.de/software/prooftree/).
+*)
+let pr_goal_emacs ~proof gid sid =
+  match proof with
+  | None -> user_err Pp.(str "No proof for that state.")
+  | Some proof ->
+    let pr gs =
+      v 0 ((str "goal ID " ++ (int gid) ++ str " at state " ++ (int sid)) ++ cut ()
+          ++ pr_goal gs)
+    in
+    try
+      let { Proof.sigma } = Proof.data proof in
+      pr { it = Evar.unsafe_of_int gid ; sigma }
+    with Not_found -> user_err Pp.(str "No such goal.")
 
 (* Printer function for sets of Assumptions.assumptions.
    It is used primarily by the Print Assumptions command. *)
@@ -837,7 +853,10 @@ let pr_goal_by_id ~proof id =
 type axiom =
   | Constant of Constant.t (* An axiom or a constant. *)
   | Positive of MutInd.t (* A mutually inductive definition which has been assumed positive. *)
-  | Guarded of Constant.t (* a constant whose (co)fixpoints have been assumed to be guarded *)
+  | Guarded of GlobRef.t (* a constant whose (co)fixpoints have been assumed to be guarded *)
+  | TemplatePolymorphic of MutInd.t (* A mutually inductive definition whose template polymorphism
+                                       on parameter universes has not been checked. *)
+  | TypeInType of GlobRef.t (* a constant which relies on type in type *)
 
 type context_object =
   | Variable of Id.t (* A section variable or a Let definition *)
@@ -856,10 +875,13 @@ struct
         Constant.CanOrd.compare k1 k2
     | Positive m1 , Positive m2 ->
         MutInd.CanOrd.compare m1 m2
+    | TemplatePolymorphic m1, TemplatePolymorphic m2 ->
+        MutInd.CanOrd.compare m1 m2
     | Guarded k1 , Guarded k2 ->
-        Constant.CanOrd.compare k1 k2
+        GlobRef.Ordered.compare k1 k2
     | _ , Constant _ -> 1
     | _ , Positive _ -> 1
+    | _, TemplatePolymorphic _ -> 1
     | _ -> -1
 
   let compare x y =
@@ -887,14 +909,20 @@ let pr_assumptionset env sigma s =
     let safe_pr_constant env kn =
       try pr_constant env kn
       with Not_found ->
-        (* FIXME? *)
-        let mp,lab = Constant.repr2 kn in
-        str (ModPath.to_string mp) ++ str "." ++ Label.print lab
+        Names.Constant.print kn
+    in
+    let safe_pr_global env gr =
+      try pr_global_env (Termops.vars_of_env env) gr
+      with Not_found ->
+        let open GlobRef in match gr with
+        | VarRef id -> Id.print id
+        | ConstRef con -> Constant.print con
+        | IndRef (mind,_) -> MutInd.print mind
+        | ConstructRef _ -> assert false
     in
     let safe_pr_inductive env kn =
       try pr_inductive env (kn,0)
       with Not_found ->
-        (* FIXME? *)
         MutInd.print kn
     in
     let safe_pr_ltype env sigma typ =
@@ -911,9 +939,14 @@ let pr_assumptionset env sigma s =
       | Constant kn ->
           safe_pr_constant env kn ++ safe_pr_ltype env sigma typ
       | Positive m ->
-          hov 2 (safe_pr_inductive env m ++ spc () ++ strbrk"is positive.")
-      | Guarded kn ->
-          hov 2 (safe_pr_constant env kn ++ spc () ++ strbrk"is positive.")
+          hov 2 (safe_pr_inductive env m ++ spc () ++ strbrk"is assumed to be positive.")
+      | Guarded gr ->
+          hov 2 (safe_pr_global env gr ++ spc () ++ strbrk"is assumed to be guarded.")
+      | TemplatePolymorphic m ->
+          hov 2 (safe_pr_inductive env m ++ spc () ++
+                 strbrk"is assumed template polymorphic on all its universe parameters.")
+      | TypeInType gr ->
+         hov 2 (safe_pr_global env gr ++ spc () ++ strbrk"relies on an unsafe hierarchy.")
     in
     let fold t typ accu =
       let (v, a, o, tr) = accu in
@@ -987,3 +1020,8 @@ let print_and_diff oldp newp =
         pr_open_subgoals ~proof
     in
     Feedback.msg_notice output;;
+
+let pr_typing_flags flags =
+  str "check_guarded: " ++ bool flags.check_guarded ++ fnl ()
+  ++ str "check_positive: " ++ bool flags.check_positive ++ fnl ()
+  ++ str "check_universes: " ++ bool flags.check_universes

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -65,6 +65,23 @@ type atom =
   | Ameta of metavariable * t
   | Aevar of Evar.t * t array
   | Aproj of (inductive * int) * accumulator
+
+type symbol =
+  | SymbValue of t
+  | SymbSort of Sorts.t
+  | SymbName of Name.t
+  | SymbConst of Constant.t
+  | SymbMatch of annot_sw
+  | SymbInd of inductive
+  | SymbMeta of metavariable
+  | SymbEvar of Evar.t
+  | SymbLevel of Univ.Level.t
+  | SymbProj of (inductive * int)
+
+type symbols = symbol array
+
+let empty_symbols = [| |]
+
 
 let accumulate_tag = 0
 

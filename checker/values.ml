@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -131,7 +131,7 @@ let v_proj = v_tuple "projection" [|v_proj_repr; v_bool|]
 let rec v_constr =
   Sum ("constr",0,[|
     [|Int|]; (* Rel *)
-    [|Fail "Var"|]; (* Var *)
+    [|v_id|]; (* Var *)
     [|Fail "Meta"|]; (* Meta *)
     [|Fail "Evar"|]; (* Evar *)
     [|v_sort|]; (* Sort *)
@@ -219,7 +219,7 @@ let v_cst_def =
     [|[|Opt Int|]; [|v_cstr_subst|]; [|v_lazy_constr|]; [|v_primitive|]|]
 
 let v_typing_flags =
-  v_tuple "typing_flags" [|v_bool; v_bool; v_oracle; v_bool; v_bool; v_bool; v_bool|]
+  v_tuple "typing_flags" [|v_bool; v_bool; v_bool; v_oracle; v_bool; v_bool; v_bool; v_bool; v_bool|]
 
 let v_univs = v_sum "universes" 0 [|[|v_context_set|]; [|v_abs_context|]|]
 
@@ -230,7 +230,6 @@ let v_cb = v_tuple "constant_body"
     v_relevance;
     Any;
     v_univs;
-    Opt v_context_set;
     v_bool;
     v_typing_flags|]
 
@@ -346,8 +345,26 @@ let v_compiled_lib =
 (** Library objects *)
 
 let v_obj = Dyn
-let v_libobj = Tuple ("libobj", [|v_id;v_obj|])
-let v_libobjs = List v_libobj
+
+let rec v_aobjs = Sum("algebraic_objects", 0,
+  [| [|v_libobjs|];
+     [|v_mp;v_subst|]
+  |])
+and v_substobjs =
+  Tuple("*", [|List v_uid;v_aobjs|])
+and v_libobjt = Sum("Libobject.t",0,
+  [| [| v_substobjs |];
+     [| v_substobjs |];
+     [| v_aobjs |];
+     [| v_libobjs |];
+     [| List v_mp |];
+     [| v_obj |]
+  |])
+
+and v_libobj = Tuple ("libobj", [|v_id;v_libobjt|])
+
+and v_libobjs = List v_libobj
+
 let v_libraryobjs = Tuple ("library_objects",[|v_libobjs;v_libobjs|])
 
 (** STM objects *)
@@ -378,11 +395,30 @@ let v_stm_seg = v_pair v_tasks v_counters
 (** Toplevel structures in a vo (see Cic.mli) *)
 
 let v_libsum =
-  Tuple ("summary", [|v_dp;Array v_dp;v_deps|])
+  Tuple ("summary", [|v_dp;v_deps|])
 
 let v_lib =
   Tuple ("library",[|v_compiled_lib;v_libraryobjs|])
 
-let v_opaques = Array (Opt v_constr)
+let v_ndecl = v_sum "named_declaration" 0
+    [| [|v_binder_annot v_id; v_constr|];               (* LocalAssum *)
+       [|v_binder_annot v_id; v_constr; v_constr|] |]   (* LocalDef *)
+
+let v_nctxt = List v_ndecl
+
+let v_work_list =
+  let v_abstr = v_pair v_instance (Array v_id) in
+  Tuple ("work_list", [|v_hmap v_cst v_abstr; v_hmap v_cst v_abstr|])
+
+let v_abstract =
+  Tuple ("abstract", [| v_nctxt; v_instance; v_abs_context |])
+
+let v_cooking_info =
+  Tuple ("cooking_info", [|v_work_list; v_abstract|])
+
+let v_delayed_universes =
+  Sum ("delayed_universes", 0, [| [| v_unit |]; [| Int; v_context_set |] |])
+
+let v_opaques = Array (Tuple ("opaque", [| List v_cooking_info; Opt (v_pair v_constr v_delayed_universes) |]))
 let v_univopaques =
   Opt (Tuple ("univopaques",[|v_context_set;v_bool|]))

@@ -1,9 +1,11 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 open Names
@@ -32,7 +34,7 @@ val of_variable : Id.t CAst.t -> raw_tacexpr
 
 val of_ident : Id.t CAst.t -> raw_tacexpr
 
-val of_constr : Constrexpr.constr_expr -> raw_tacexpr
+val of_constr : ?delimiters:Id.t list -> Constrexpr.constr_expr -> raw_tacexpr
 
 val of_open_constr : Constrexpr.constr_expr -> raw_tacexpr
 
@@ -95,8 +97,8 @@ val wit_constr : (Constrexpr.constr_expr, Glob_term.glob_constr) Arg.tag
 
 val wit_open_constr : (Constrexpr.constr_expr, Glob_term.glob_constr) Arg.tag
 
-val wit_ltac1 : (Ltac_plugin.Tacexpr.raw_tactic_expr, Ltac_plugin.Tacexpr.glob_tactic_expr) Arg.tag
+val wit_ltac1 : (Id.t CAst.t list * Ltac_plugin.Tacexpr.raw_tactic_expr, Id.t list * Ltac_plugin.Tacexpr.glob_tactic_expr) Arg.tag
 (** Ltac1 AST quotation, seen as a 'tactic'. Its type is unit in Ltac2. *)
 
-val wit_ltac1val : (Ltac_plugin.Tacexpr.raw_tactic_expr, Ltac_plugin.Tacexpr.glob_tactic_expr) Arg.tag
+val wit_ltac1val : (Id.t CAst.t list * Ltac_plugin.Tacexpr.raw_tactic_expr, Id.t list * Ltac_plugin.Tacexpr.glob_tactic_expr) Arg.tag
 (** Ltac1 AST quotation, seen as a value-returning expression, with type Ltac1.t. *)

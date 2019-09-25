@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -12,7 +12,6 @@ open Util
 open CAst
 open Names
 open Nameops
-open Globnames
 open Glob_term
 open Evar_kinds
 
@@ -45,25 +44,32 @@ let map_glob_decl_left_to_right f (na,k,obd,ty) =
   let comp2 = f ty in
   (na,k,comp1,comp2)
 
+let glob_sort_name_eq g1 g2 = match g1, g2 with
+  | GSProp, GSProp
+  | GProp, GProp
+  | GSet, GSet -> true
+  | GType u1, GType u2 -> Libnames.qualid_eq u1 u2
+  | (GSProp|GProp|GSet|GType _), _ -> false
 
-let glob_sort_eq g1 g2 = let open Glob_term in match g1, g2 with
-| GSProp, GSProp
-| GProp, GProp
-| GSet, GSet -> true
-| GType l1, GType l2 ->
-   List.equal (Option.equal (fun (x,m) (y,n) -> Libnames.qualid_eq x y && Int.equal m n)) l1 l2
-| (GSProp|GProp|GSet|GType _), _ -> false
+exception ComplexSort
 
 let glob_sort_family = let open Sorts in function
-| GSProp -> InSProp
-| GProp -> InProp
-| GSet -> InSet
-| GType _ -> InType
+  | UAnonymous {rigid=true} -> InType
+  | UNamed [GSProp,0] -> InProp
+  | UNamed [GProp,0] -> InProp
+  | UNamed [GSet,0] -> InSet
+  | _ -> raise ComplexSort
+
+let glob_sort_eq u1 u2 = match u1, u2 with
+  | UAnonymous {rigid=r1}, UAnonymous {rigid=r2} -> r1 = r2
+  | UNamed l1, UNamed l2 ->
+    List.equal (fun (x,m) (y,n) -> glob_sort_name_eq x y && Int.equal m n) l1 l2
+  | (UNamed _ | UAnonymous _), _ -> false
 
 let binding_kind_eq bk1 bk2 = match bk1, bk2 with
-  | Decl_kinds.Explicit, Decl_kinds.Explicit -> true
-  | Decl_kinds.Implicit, Decl_kinds.Implicit -> true
-  | (Decl_kinds.Explicit | Decl_kinds.Implicit), _ -> false
+  | Explicit, Explicit -> true
+  | Implicit, Implicit -> true
+  | (Explicit | Implicit), _ -> false
 
 let case_style_eq s1 s2 = let open Constr in match s1, s2 with
   | LetStyle, LetStyle -> true
@@ -436,7 +442,7 @@ let rec rename_glob_vars l c = force @@ DAst.map_with_loc (fun ?loc -> function
   | GVar id as r ->
       let id' = rename_var l id in
       if id == id' then r else GVar id'
-  | GRef (VarRef id,_) as r ->
+  | GRef (GlobRef.VarRef id,_) as r ->
       if List.exists (fun (_,id') -> Id.equal id id') l then raise UnsoundRenaming
       else r
   | GProd (na,bk,t,c) ->
@@ -495,10 +501,10 @@ let rec cases_pattern_of_glob_constr env na c =
     | Anonymous -> PatVar (Name id)
     end
   | GHole (_,_,_) -> PatVar na
-  | GRef (ConstructRef cstr,_) -> PatCstr (cstr,[],na)
+  | GRef (GlobRef.ConstructRef cstr,_) -> PatCstr (cstr,[],na)
   | GApp (c, l) ->
     begin match DAst.get c with
-    | GRef (ConstructRef cstr,_) ->
+    | GRef (GlobRef.ConstructRef cstr,_) ->
       let nparams = Inductiveops.inductive_nparams env (fst cstr) in
       let _,l = List.chop nparams l in
       PatCstr (cstr,List.map (cases_pattern_of_glob_constr env Anonymous) l,na)
@@ -547,9 +553,9 @@ let add_alias ?loc na c =
 
 (* Turn a closed cases pattern into a glob_constr *)
 let rec glob_constr_of_cases_pattern_aux env isclosed x = DAst.map_with_loc (fun ?loc -> function
-  | PatCstr (cstr,[],na) -> add_alias ?loc na (GRef (ConstructRef cstr,None))
+  | PatCstr (cstr,[],na) -> add_alias ?loc na (GRef (GlobRef.ConstructRef cstr,None))
   | PatCstr (cstr,l,na)  ->
-      let ref = DAst.make ?loc @@ GRef (ConstructRef cstr,None) in
+      let ref = DAst.make ?loc @@ GRef (GlobRef.ConstructRef cstr,None) in
       let l = add_patterns_for_params_remove_local_defs env cstr l in
       add_alias ?loc na (GApp (ref, List.map (glob_constr_of_cases_pattern_aux env isclosed) l))
   | PatVar (Name id) when not isclosed ->

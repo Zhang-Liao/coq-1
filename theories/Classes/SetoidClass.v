@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -27,7 +27,6 @@ Require Export Coq.Classes.Morphisms.
 
 (** A setoid wraps an equivalence. *)
 
-#[universes(template)]
 Class Setoid A := {
   equiv : relation A ;
   setoid_equiv :> Equivalence equiv }.
@@ -129,7 +128,6 @@ Program Instance setoid_partial_app_morphism `(sa : Setoid A) (x : A) : Proper (
 
 (** Partial setoids don't require reflexivity so we can build a partial setoid on the function space. *)
 
-#[universes(template)]
 Class PartialSetoid (A : Type) :=
   { pequiv : relation A ; pequiv_prf :> PER pequiv }.
 

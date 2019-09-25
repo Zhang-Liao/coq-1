@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -137,7 +137,6 @@ Definition IsStepFun (f:R -> R) (a b:R) : Type :=
   { l:Rlist & is_subdivision f a b l }.
 
 (** ** Class of step functions *)
-#[universes(template)]
 Record StepFun (a b:R) : Type := mkStepFun
   {fe :> R -> R; pre : IsStepFun fe a b}.
 

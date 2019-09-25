@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -27,7 +27,6 @@ open Smartlocate
 open Termops
 open Inductiveops
 open Typing
-open Decl_kinds
 open Typeclasses
 open Pattern
 open Patternops
@@ -49,6 +48,7 @@ let head_constr_bound sigma t =
   let t = strip_outer_cast sigma t in
   let _,ccl = decompose_prod_assum sigma t in
   let hd,args = decompose_app sigma ccl in
+  let open GlobRef in
   match EConstr.kind sigma hd with
   | Const (c, _) -> ConstRef c
   | Ind (i, _) -> IndRef i
@@ -66,6 +66,7 @@ let decompose_app_bound sigma t =
   let t = strip_outer_cast sigma t in
   let _,ccl = decompose_prod_assum sigma t in
   let hd,args = decompose_app_vect sigma ccl in
+  let open GlobRef in
   match EConstr.kind sigma hd with
     | Const (c,u) -> ConstRef c, args
     | Ind (i,u) -> IndRef i, args
@@ -142,15 +143,22 @@ type raw_hint = constr * types * Univ.ContextSet.t
 
 type hint = (raw_hint * clausenv) hint_ast with_uid
 
-type 'a with_metadata = {
-  pri     : int;            (* A number lower is higher priority *)
-  poly    : polymorphic;    (** Is the hint polymorpic and hence should be refreshed at each application *)
-  pat     : constr_pattern option; (* A pattern for the concl of the Goal *)
-  name    : hints_path_atom; (* A potential name to refer to the hint *)
-  db : string option; (** The database from which the hint comes *)
-  secvars : Id.Pred.t; (* The set of section variables the hint depends on *)
-  code    : 'a;     (* the tactic to apply when the concl matches pat *)
-}
+type 'a with_metadata =
+  { pri     : int
+  (** A number lower is higher priority *)
+  ; poly    : bool
+  (** Is the hint polymorpic and hence should be refreshed at each application *)
+  ; pat     : constr_pattern option
+  (** A pattern for the concl of the Goal *)
+  ; name    : hints_path_atom
+  (** A potential name to refer to the hint *)
+  ; db : string option
+  (** The database from which the hint comes *)
+  ; secvars : Id.Pred.t
+  (** The set of section variables the hint depends on *)
+  ; code    : 'a
+  (** the tactic to apply when the concl matches pat *)
+  }
 
 type full_hint = hint with_metadata
 
@@ -289,7 +297,7 @@ let lookup_tacs sigma concl st se =
   let sl' = List.stable_sort pri_order_int l' in
   List.merge pri_order_int se.sentry_nopat sl'
 
-let is_transparent_gr ts = function
+let is_transparent_gr ts = let open GlobRef in function
   | VarRef id -> TransparentState.is_transparent_variable ts id
   | ConstRef cst -> TransparentState.is_transparent_constant ts cst
   | IndRef _ | ConstructRef _ -> false
@@ -792,7 +800,7 @@ let secvars_of_constr env sigma c =
 let secvars_of_global env gr =
   secvars_of_idset (vars_of_global env gr)
 
-let make_exact_entry env sigma info poly ?(name=PathAny) (c, cty, ctx) =
+let make_exact_entry env sigma info ~poly ?(name=PathAny) (c, cty, ctx) =
   let secvars = secvars_of_constr env sigma c in
   let cty = strip_outer_cast sigma cty in
     match EConstr.kind sigma cty with
@@ -813,7 +821,7 @@ let make_exact_entry env sigma info poly ?(name=PathAny) (c, cty, ctx) =
 	   db = None; secvars;
 	   code = with_uid (Give_exact (c, cty, ctx)); })
 
-let make_apply_entry env sigma (eapply,hnf,verbose) info poly ?(name=PathAny) (c, cty, ctx) =
+let make_apply_entry env sigma (eapply,hnf,verbose) info ~poly ?(name=PathAny) (c, cty, ctx) =
   let cty = if hnf then hnf_constr env sigma cty else cty in
   match EConstr.kind sigma cty with
   | Prod _ ->
@@ -887,18 +895,18 @@ let fresh_global_or_constr env sigma poly cr =
     else begin
       if isgr then
         warn_polymorphic_hint (pr_hint_term env sigma ctx cr);
-      Declare.declare_universe_context false ctx;
+      Declare.declare_universe_context ~poly:false ctx;
       (c, Univ.ContextSet.empty)
     end
 
-let make_resolves env sigma flags info poly ?name cr =
+let make_resolves env sigma flags info ~poly ?name cr =
   let c, ctx = fresh_global_or_constr env sigma poly cr in
   let cty = Retyping.get_type_of env sigma c in
   let try_apply f =
     try Some (f (c, cty, ctx)) with Failure _ -> None in
   let ents = List.map_filter try_apply
-			     [make_exact_entry env sigma info poly ?name;
-			      make_apply_entry env sigma flags info poly ?name]
+                             [make_exact_entry env sigma info ~poly ?name;
+                              make_apply_entry env sigma flags info ~poly ?name]
   in
   if List.is_empty ents then
     user_err ~hdr:"Hint"
@@ -912,8 +920,8 @@ let make_resolve_hyp env sigma decl =
   let hname = NamedDecl.get_id decl in
   let c = mkVar hname in
   try
-    [make_apply_entry env sigma (true, true, false) empty_hint_info false
-       ~name:(PathHints [VarRef hname])
+    [make_apply_entry env sigma (true, true, false) empty_hint_info ~poly:false
+       ~name:(PathHints [GlobRef.VarRef hname])
        (c, NamedDecl.get_type decl, Univ.ContextSet.empty)]
   with
     | Failure _ -> []
@@ -1178,7 +1186,7 @@ let add_resolves env sigma clist local dbnames =
       let r =
         List.flatten (List.map (fun (pri, poly, hnf, path, gr) ->
           make_resolves env sigma (true,hnf,not !Flags.quiet)
-            pri poly ~name:path gr) clist)
+            pri ~poly ~name:path gr) clist)
       in
       let hint = make_hint ~local dbname (AddHints r) in
       Lib.add_anonymous_leaf (inAutoHint hint))
@@ -1238,8 +1246,8 @@ type hnf = bool
 type nonrec hint_info = hint_info
 
 type hints_entry =
-  | HintsResolveEntry of (hint_info * polymorphic * hnf * hints_path_atom * hint_term) list
-  | HintsImmediateEntry of (hints_path_atom * polymorphic * hint_term) list
+  | HintsResolveEntry of (hint_info * bool * hnf * hints_path_atom * hint_term) list
+  | HintsImmediateEntry of (hints_path_atom * bool * hint_term) list
   | HintsCutEntry of hints_path
   | HintsUnfoldEntry of evaluable_global_reference list
   | HintsTransparencyEntry of evaluable_global_reference hints_transparency_target * bool
@@ -1286,7 +1294,7 @@ let prepare_hint check (poly,local) env init (sigma,c) =
     let diff = Univ.ContextSet.diff (Evd.universe_context_set sigma) (Evd.universe_context_set init) in
     if poly then IsConstr (c', diff)
     else if local then IsConstr (c', diff)
-    else (Declare.declare_universe_context false diff;
+    else (Declare.declare_universe_context ~poly:false diff;
 	  IsConstr (c', Univ.ContextSet.empty))
 
 let project_hint ~poly pri l2r r =
@@ -1309,16 +1317,20 @@ let project_hint ~poly pri l2r r =
   let c = Reductionops.whd_beta sigma (mkApp (c, Context.Rel.to_extended_vect mkRel 0 sign)) in
   let c = it_mkLambda_or_LetIn
     (mkApp (p,[|mkArrow a Sorts.Relevant (lift 1 b);mkArrow b Sorts.Relevant (lift 1 a);c|])) sign in
-  let id =
+  let name =
     Nameops.add_suffix (Nametab.basename_of_global gr) ("_proj_" ^ (if l2r then "l2r" else "r2l"))
   in
   let ctx = Evd.univ_entry ~poly sigma in
   let c = EConstr.to_constr sigma c in
-  let c = Declare.declare_definition ~internal:Declare.InternalTacticRequest id (c,ctx) in
+  let cb = Declare.(DefinitionEntry (definition_entry ~univs:ctx ~opaque:false c)) in
+  let c = Declare.declare_constant
+      ~local:Declare.ImportDefaultBehavior
+      ~name ~kind:Decls.(IsDefinition Definition) cb
+  in
   let info = {Typeclasses.hint_priority = pri; hint_pattern = None} in
-    (info,false,true,PathAny, IsGlobRef (Globnames.ConstRef c))
+    (info,false,true,PathAny, IsGlobRef (GlobRef.ConstRef c))
 
-let interp_hints poly =
+let interp_hints ~poly =
   fun h ->
   let env = Global.env () in
   let sigma = Evd.from_env env in
@@ -1366,7 +1378,7 @@ let interp_hints poly =
         Dumpglob.dump_reference ?loc:qid.CAst.loc "<>" (string_of_qualid qid) "ind";
           List.init (nconstructors env ind)
 	    (fun i -> let c = (ind,i+1) in
-		      let gr = ConstructRef c in
+                      let gr = GlobRef.ConstructRef c in
 			empty_hint_info, 
                         (Declareops.inductive_is_polymorphic mib), true,
 			PathHints [gr], IsGlobRef gr)
@@ -1417,7 +1429,7 @@ let expand_constructor_hints env sigma lems =
 let constructor_hints env sigma eapply lems =
   let lems = expand_constructor_hints env sigma lems in
   List.map_append (fun (poly, lem) ->
-      make_resolves env sigma (eapply,true,false) empty_hint_info poly lem) lems
+      make_resolves env sigma (eapply,true,false) empty_hint_info ~poly lem) lems
 
 let make_local_hint_db env sigma ts eapply lems =
   let map c = c env sigma in
@@ -1518,7 +1530,7 @@ let pr_hint_term env sigma cl =
 (* print all hints that apply to the concl of the current goal *)
 let pr_applicable_hint pf =
   let env = Global.env () in
-  let pts = Proof_global.give_me_the_proof pf in
+  let pts = Proof_global.get_proof pf in
   let Proof.{goals;sigma} = Proof.data pts in
   match goals with
   | [] -> CErrors.user_err Pp.(str "No focused goal.")

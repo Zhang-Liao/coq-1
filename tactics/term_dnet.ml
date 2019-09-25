@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -289,6 +289,7 @@ struct
   open TDnet
 
   let pat_of_constr c : term_pattern =
+    let open GlobRef in
     (* To each evar we associate a unique identifier. *)
     let metas = ref Evar.Map.empty in
     let rec pat_of_constr c = match Constr.kind c with

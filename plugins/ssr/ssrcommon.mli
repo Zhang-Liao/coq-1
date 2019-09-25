@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -205,6 +205,7 @@ val pf_type_of :
 val pfe_type_of :
            Goal.goal Evd.sigma ->
            EConstr.t -> Goal.goal Evd.sigma * EConstr.types
+val pfe_new_type : Goal.goal Evd.sigma -> Goal.goal Evd.sigma * EConstr.types
 val pfe_type_relevance_of :
            Goal.goal Evd.sigma ->
            EConstr.t -> Goal.goal Evd.sigma * EConstr.types * Sorts.relevance

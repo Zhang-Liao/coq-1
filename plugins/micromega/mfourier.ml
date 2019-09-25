@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -15,7 +15,7 @@ open Vect
 
 let debug = false
 
-let compare_float (p : float) q = Pervasives.compare p q
+let compare_float (p : float) q = pervasives_compare p q
 
 (** Implementation of intervals *)
 open Itv
@@ -587,7 +587,7 @@ struct
   let optimise vect l =
     (* We add a dummy (fresh) variable for vector *)
     let fresh =
-      List.fold_left (fun fr c -> Pervasives.max fr (Vect.fresh c.coeffs)) 0 l in
+      List.fold_left (fun fr c -> max fr (Vect.fresh c.coeffs)) 0 l in
     let cstr = {
       coeffs = Vect.set fresh (Int (-1)) vect ;
       op = Eq ;

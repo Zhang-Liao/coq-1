@@ -1,7 +1,7 @@
 (* -*- coding: utf-8 -*- *)
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -208,7 +208,6 @@ Definition concat s1 s2 :=
     - [present] is [true] if and only if [s] contains  [x].
 *)
 
-#[universes(template)]
 Record triple := mktriple { t_left:t; t_in:bool; t_right:t }.
 Notation "<< l , b , r >>" := (mktriple l b r) (at level 9).
 

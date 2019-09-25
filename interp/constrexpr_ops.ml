@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -17,15 +17,9 @@ open Namegen
 open Glob_term
 open Constrexpr
 open Notation
-open Decl_kinds
 
 (***********************)
 (* For binders parsing *)
-
-let binding_kind_eq bk1 bk2 = match bk1, bk2 with
-| Explicit, Explicit -> true
-| Implicit, Implicit -> true
-| _ -> false
 
 let abstraction_kind_eq ak1 ak2 = match ak1, ak2 with
 | AbsLambda, AbsLambda -> true
@@ -33,9 +27,9 @@ let abstraction_kind_eq ak1 ak2 = match ak1, ak2 with
 | _ -> false
 
 let binder_kind_eq b1 b2 = match b1, b2 with
-| Default bk1, Default bk2 -> binding_kind_eq bk1 bk2
+| Default bk1, Default bk2 -> Glob_ops.binding_kind_eq bk1 bk2
 | Generalized (ck1, b1), Generalized (ck2, b2) ->
-  binding_kind_eq ck1 ck2 &&
+  Glob_ops.binding_kind_eq ck1 ck2 &&
   (if b1 then b2 else not b2)
 | _ -> false
 
@@ -172,7 +166,7 @@ let rec constr_expr_eq e1 e2 =
     | CPrim i1, CPrim i2 ->
       prim_token_eq i1 i2
     | CGeneralization (bk1, ak1, e1), CGeneralization (bk2, ak2, e2) ->
-      binding_kind_eq bk1 bk2 &&
+      Glob_ops.binding_kind_eq bk1 bk2 &&
       Option.equal abstraction_kind_eq ak1 ak2 &&
       constr_expr_eq e1 e2
     | CDelimiters(s1,e1), CDelimiters(s2,e2) ->
@@ -631,7 +625,8 @@ let interp_univ_constraints env evd cstrs =
 let interp_univ_decl env decl =
   let open UState in
   let pl : lident list = decl.univdecl_instance in
-  let evd = Evd.from_ctx (UState.make_with_initial_binders (Environ.universes env) pl) in
+  let evd = Evd.from_ctx (UState.make_with_initial_binders ~lbound:(Environ.universes_lbound env)
+                            (Environ.universes env) pl) in
   let evd, cstrs = interp_univ_constraints env evd decl.univdecl_constraints in
   let decl = { univdecl_instance = pl;
     univdecl_extensible_instance = decl.univdecl_extensible_instance;

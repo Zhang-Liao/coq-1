@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -69,9 +69,7 @@ val is_joined_environment : safe_environment -> bool
 
 (** Insertion of local declarations (Local or Variables) *)
 
-val push_named_assum :
-  (Id.t * Constr.types * bool (* polymorphic *))
-    Univ.in_universe_context_set -> safe_transformer0
+val push_named_assum : (Id.t * Constr.types) -> safe_transformer0
 
 (** Returns the full universe context necessary to typecheck the definition
   (futures are forced) *)
@@ -81,24 +79,22 @@ val push_named_def :
 (** Insertion of global axioms or definitions *)
 
 type 'a effect_entry =
-| EffectEntry : private_constants effect_entry
+| EffectEntry : private_constants Entries.seff_wrap effect_entry
 | PureEntry : unit effect_entry
 
 type global_declaration =
   | ConstantEntry : 'a effect_entry * 'a Entries.constant_entry -> global_declaration
 
-type exported_private_constant = 
-  Constant.t * Entries.side_effect_role
+type exported_private_constant = Constant.t
 
 val export_private_constants : in_section:bool ->
   private_constants Entries.proof_output ->
   (Constr.constr Univ.in_universe_context_set * exported_private_constant list) safe_transformer
 
-(** returns the main constant plus a list of auxiliary constants (empty
-    unless one requires the side effects to be exported) *)
+(** returns the main constant plus a certificate of its validity *)
 val add_constant :
-  ?role:Entries.side_effect_role -> in_section:bool -> Label.t -> global_declaration ->
-    (Constant.t * private_constants) safe_transformer
+  side_effect:'a effect_entry -> in_section:bool -> Label.t -> global_declaration ->
+    (Constant.t * 'a) safe_transformer
 
 val add_recipe :
   in_section:bool -> Label.t -> Cooking.recipe -> Constant.t safe_transformer
@@ -134,6 +130,9 @@ val set_engagement : Declarations.engagement -> safe_transformer0
 val set_indices_matter : bool -> safe_transformer0
 val set_typing_flags : Declarations.typing_flags -> safe_transformer0
 val set_share_reduction : bool -> safe_transformer0
+val set_check_guarded : bool -> safe_transformer0
+val set_check_positive : bool -> safe_transformer0
+val set_check_universes : bool -> safe_transformer0
 val set_VM : bool -> safe_transformer0
 val set_native_compiler : bool -> safe_transformer0
 val make_sprop_cumulative : safe_transformer0
@@ -178,8 +177,6 @@ type compiled_library
 type native_library = Nativecode.global list
 
 val module_of_library : compiled_library -> Declarations.module_body
-
-val get_library_native_symbols : safe_environment -> DirPath.t -> Nativecode.symbols
 
 val start_library : DirPath.t -> ModPath.t safe_transformer
 

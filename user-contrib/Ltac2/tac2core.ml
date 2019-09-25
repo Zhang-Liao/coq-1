@@ -1,9 +1,11 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 open Util
@@ -1092,7 +1094,7 @@ let () =
 let () =
   let intern self ist ref = match ref.CAst.v with
   | Tac2qexpr.QHypothesis id ->
-    GlbVal (Globnames.VarRef id), gtypref t_reference
+    GlbVal (GlobRef.VarRef id), gtypref t_reference
   | Tac2qexpr.QReference qid ->
     let gr =
       try Nametab.locate qid
@@ -1104,7 +1106,7 @@ let () =
   let subst s c = Globnames.subst_global_reference s c in
   let interp _ gr = return (Value.of_reference gr) in
   let print _ = function
-  | Globnames.VarRef id -> str "reference:(" ++ str "&" ++ Id.print id ++ str ")"
+  | GlobRef.VarRef id -> str "reference:(" ++ str "&" ++ Id.print id ++ str ")"
   | r -> str "reference:(" ++ Printer.pr_global r ++ str ")"
   in
   let obj = {
@@ -1116,26 +1118,47 @@ let () =
   define_ml_object Tac2quote.wit_reference obj
 
 let () =
-  let intern self ist tac =
+  let intern self ist (ids, tac) =
+    let map { CAst.v = id } = id in
+    let ids = List.map map ids in
     (* Prevent inner calls to Ltac2 values *)
     let extra = Tac2intern.drop_ltac2_env ist.Genintern.extra in
-    let ist = { ist with Genintern.extra } in
+    let ltacvars = List.fold_right Id.Set.add ids ist.Genintern.ltacvars in
+    let ist = { ist with Genintern.extra; ltacvars } in
     let _, tac = Genintern.intern Ltac_plugin.Tacarg.wit_tactic ist tac in
-    GlbVal tac, gtypref t_unit
+    let fold ty _ = GTypArrow (gtypref t_ltac1, ty) in
+    let ty = List.fold_left fold (gtypref t_unit) ids in
+    GlbVal (ids, tac), ty
   in
-  let interp ist tac =
-    let ist = { env_ist = Id.Map.empty } in
-    let lfun = Tac2interp.set_env ist Id.Map.empty in
-    let ist = Ltac_plugin.Tacinterp.default_ist () in
-    let ist = { ist with Geninterp.lfun = lfun } in
-    let tac = (Ltac_plugin.Tacinterp.eval_tactic_ist ist tac : unit Proofview.tactic) in
-    let wrap (e, info) = set_bt info >>= fun info -> Proofview.tclZERO ~info e in
-    Proofview.tclOR tac wrap >>= fun () ->
-    return v_unit
+  let interp _ (ids, tac) =
+    let clos args =
+      let add lfun id v =
+        let v = Tac2ffi.to_ext val_ltac1 v in
+        Id.Map.add id v lfun
+      in
+      let lfun = List.fold_left2 add Id.Map.empty ids args in
+      let ist = { env_ist = Id.Map.empty } in
+      let lfun = Tac2interp.set_env ist lfun in
+      let ist = Ltac_plugin.Tacinterp.default_ist () in
+      let ist = { ist with Geninterp.lfun = lfun } in
+      let tac = (Ltac_plugin.Tacinterp.eval_tactic_ist ist tac : unit Proofview.tactic) in
+      let wrap (e, info) = set_bt info >>= fun info -> Proofview.tclZERO ~info e in
+      Proofview.tclOR tac wrap >>= fun () ->
+      return v_unit
+    in
+    let len = List.length ids in
+    if Int.equal len 0 then
+      clos []
+    else
+      return (Tac2ffi.of_closure (Tac2ffi.abstract len clos))
   in
-  let subst s tac = Genintern.substitute Ltac_plugin.Tacarg.wit_tactic s tac in
-  let print env tac =
-    str "ltac1:(" ++ Ltac_plugin.Pptactic.pr_glob_tactic env tac ++ str ")"
+  let subst s (ids, tac) = (ids, Genintern.substitute Ltac_plugin.Tacarg.wit_tactic s tac) in
+  let print env (ids, tac) =
+    let ids =
+      if List.is_empty ids then mt ()
+      else pr_sequence Id.print ids ++ spc () ++ str "|-" ++ spc ()
+    in
+    str "ltac1:(" ++ ids ++ Ltac_plugin.Pptactic.pr_glob_tactic env tac ++ str ")"
   in
   let obj = {
     ml_intern = intern;
@@ -1147,23 +1170,44 @@ let () =
 
 let () =
   let open Ltac_plugin in
-  let intern self ist tac =
+  let intern self ist (ids, tac) =
+    let map { CAst.v = id } = id in
+    let ids = List.map map ids in
     (* Prevent inner calls to Ltac2 values *)
     let extra = Tac2intern.drop_ltac2_env ist.Genintern.extra in
-    let ist = { ist with Genintern.extra } in
+    let ltacvars = List.fold_right Id.Set.add ids ist.Genintern.ltacvars in
+    let ist = { ist with Genintern.extra; ltacvars } in
     let _, tac = Genintern.intern Ltac_plugin.Tacarg.wit_tactic ist tac in
-    GlbVal tac, gtypref t_ltac1
+    let fold ty _ = GTypArrow (gtypref t_ltac1, ty) in
+    let ty = List.fold_left fold (gtypref t_ltac1) ids in
+    GlbVal (ids, tac), ty
   in
-  let interp ist tac =
-    let ist = { env_ist = Id.Map.empty } in
-    let lfun = Tac2interp.set_env ist Id.Map.empty in
-    let ist = Ltac_plugin.Tacinterp.default_ist () in
-    let ist = { ist with Geninterp.lfun = lfun } in
-    return (Value.of_ext val_ltac1 (Tacinterp.Value.of_closure ist tac))
+  let interp _ (ids, tac) =
+    let clos args =
+      let add lfun id v =
+        let v = Tac2ffi.to_ext val_ltac1 v in
+        Id.Map.add id v lfun
+      in
+      let lfun = List.fold_left2 add Id.Map.empty ids args in
+      let ist = { env_ist = Id.Map.empty } in
+      let lfun = Tac2interp.set_env ist lfun in
+      let ist = Ltac_plugin.Tacinterp.default_ist () in
+      let ist = { ist with Geninterp.lfun = lfun } in
+      return (Value.of_ext val_ltac1 (Tacinterp.Value.of_closure ist tac))
+    in
+    let len = List.length ids in
+    if Int.equal len 0 then
+      clos []
+    else
+      return (Tac2ffi.of_closure (Tac2ffi.abstract len clos))
   in
-  let subst s tac = Genintern.substitute Tacarg.wit_tactic s tac in
-  let print env tac =
-    str "ltac1val:(" ++ Ltac_plugin.Pptactic.pr_glob_tactic env tac ++ str ")"
+  let subst s (ids, tac) = (ids, Genintern.substitute Tacarg.wit_tactic s tac) in
+  let print env (ids, tac) =
+    let ids =
+      if List.is_empty ids then mt ()
+      else pr_sequence Id.print ids ++ str " |- "
+    in
+    str "ltac1val:(" ++ ids++ Ltac_plugin.Pptactic.pr_glob_tactic env tac ++ str ")"
   in
   let obj = {
     ml_intern = intern;
@@ -1355,6 +1399,16 @@ let () = add_scope "thunk" begin function
 | arg -> scope_fail "thunk" arg
 end
 
+let () = add_scope "constr" (fun arg ->
+    let delimiters = List.map (function
+        | SexprRec (_, { v = Some s }, []) -> s
+        | _ -> scope_fail "constr" arg)
+        arg
+    in
+    let act e = Tac2quote.of_constr ~delimiters e in
+    Tac2entries.ScopeRule (Extend.Aentry Pcoq.Constr.constr, act)
+  )
+
 let add_expr_scope name entry f =
   add_scope name begin function
   | [] -> Tac2entries.ScopeRule (Extend.Aentry entry, f)
@@ -1382,7 +1436,6 @@ let () = add_expr_scope "assert" q_assert Tac2quote.of_assertion
 let () = add_expr_scope "constr_matching" q_constr_matching Tac2quote.of_constr_matching
 let () = add_expr_scope "goal_matching" q_goal_matching Tac2quote.of_goal_matching
 
-let () = add_generic_scope "constr" Pcoq.Constr.constr Tac2quote.wit_constr
 let () = add_generic_scope "open_constr" Pcoq.Constr.constr Tac2quote.wit_open_constr
 let () = add_generic_scope "pattern" Pcoq.Constr.constr Tac2quote.wit_pattern
 

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -329,7 +329,6 @@ let strengthen_const mp_from l cb resolver =
     let u = Univ.make_abstract_instance (Declareops.constant_polymorphic_context cb) in
       { cb with
         const_body = Def (Mod_subst.from_val (mkConstU (con,u)));
-        const_private_poly_univs = None;
 	const_body_code = Some (Cemitcodes.from_val (Cbytegen.compile_alias con)) }
 
 let rec strengthen_mod mp_from mp_to mb =

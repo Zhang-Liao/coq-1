@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -287,7 +287,8 @@ let () =
   Genintern.register_subst0 wit_pre_ident (fun _ v -> v);
   Genintern.register_subst0 wit_ident (fun _ v -> v);
   Genintern.register_subst0 wit_var (fun _ v -> v);
-  Genintern.register_subst0 wit_intro_pattern (fun _ v -> v);
+  Genintern.register_subst0 wit_intropattern subst_intro_pattern [@warning "-3"];
+  Genintern.register_subst0 wit_simple_intropattern subst_intro_pattern;
   Genintern.register_subst0 wit_tactic subst_tactic;
   Genintern.register_subst0 wit_ltac subst_tactic;
   Genintern.register_subst0 wit_constr subst_glob_constr;

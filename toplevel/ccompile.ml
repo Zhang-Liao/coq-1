@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -20,6 +20,16 @@ let fatal_error msg =
 (******************************************************************************)
 (* Interactive Load File Simulation                                           *)
 (******************************************************************************)
+
+let load_init_file opts ~state =
+  if opts.pre.load_rcfile then
+    Topfmt.(in_phase ~phase:LoadingRcFile) (fun () ->
+        Coqinit.load_rcfile ~rcfile:opts.config.rcfile ~state) ()
+  else begin
+    Flags.if_verbose Feedback.msg_info (str"Skipping rcfile loading.");
+    state
+  end
+
 let load_vernacular opts ~state =
   List.fold_left
     (fun state (f_in, echo) ->
@@ -29,19 +39,12 @@ let load_vernacular opts ~state =
       if !Flags.beautify
       then Flags.with_option Flags.beautify_file load_vernac f_in
       else load_vernac s
-    ) state (List.rev opts.load_vernacular_list)
+    ) state opts.pre.load_vernacular_list
 
 let load_init_vernaculars opts ~state =
-  let state =
-    if opts.load_rcfile then
-      Topfmt.(in_phase ~phase:LoadingRcFile) (fun () ->
-          Coqinit.load_rcfile ~rcfile:opts.rcfile ~state) ()
-    else begin
-      Flags.if_verbose Feedback.msg_info (str"Skipping rcfile loading.");
-      state
-    end in
-
-  load_vernacular opts ~state
+  let state = load_init_file opts ~state in
+  let state = load_vernacular opts ~state in
+  state
 
 (******************************************************************************)
 (* File Compilation                                                           *)
@@ -99,14 +102,12 @@ let compile opts copts ~echo ~f_in ~f_out =
   in
   let iload_path = build_load_path opts in
   let require_libs = require_libs opts in
-  let stm_options = opts.stm_flags in
-  let output_native_objects = match opts.native_compiler with
+  let stm_options = opts.config.stm_flags in
+  let output_native_objects = match opts.config.native_compiler with
     | NativeOff -> false | NativeOn {ondemand} -> not ondemand
   in
   match copts.compilation_mode with
   | BuildVo ->
-      Flags.record_aux_file := true;
-
       let long_f_dot_v, long_f_dot_vo =
         ensure_exists_with_prefix f_in f_out ".v" ".vo" in
 
@@ -115,14 +116,17 @@ let compile opts copts ~echo ~f_in ~f_out =
           Stm.{ doc_type = VoDoc long_f_dot_vo;
                 iload_path; require_libs; stm_options;
               } in
-      let state = { doc; sid; proof = None; time = opts.time } in
+      let state = { doc; sid; proof = None; time = opts.config.time } in
       let state = load_init_vernaculars opts ~state in
       let ldir = Stm.get_ldir ~doc:state.doc in
       Aux_file.(start_aux_file
         ~aux_file:(aux_file_name_for long_f_dot_vo)
         ~v_file:long_f_dot_v);
+
+      Dumpglob.set_glob_output copts.glob_out;
       Dumpglob.start_dump_glob ~vfile:long_f_dot_v ~vofile:long_f_dot_vo;
       Dumpglob.dump_string ("F" ^ Names.DirPath.to_string ldir ^ "\n");
+
       let wall_clock1 = Unix.gettimeofday () in
       let check = Stm.AsyncOpts.(stm_options.async_proofs_mode = APoff) in
       let state = Vernac.load_vernac ~echo ~check ~interactive:false ~state long_f_dot_v in
@@ -136,9 +140,6 @@ let compile opts copts ~echo ~f_in ~f_out =
       Dumpglob.end_dump_glob ()
 
   | BuildVio ->
-      Flags.record_aux_file := false;
-      Dumpglob.noglob ();
-
       let long_f_dot_v, long_f_dot_vio =
         ensure_exists_with_prefix f_in f_out ".v" ".vio" in
 
@@ -161,7 +162,7 @@ let compile opts copts ~echo ~f_in ~f_out =
                 iload_path; require_libs; stm_options;
               } in
 
-      let state = { doc; sid; proof = None; time = opts.time } in
+      let state = { doc; sid; proof = None; time = opts.config.time } in
       let state = load_init_vernaculars opts ~state in
       let ldir = Stm.get_ldir ~doc:state.doc in
       let state = Vernac.load_vernac ~echo ~check:false ~interactive:false ~state long_f_dot_v in
@@ -171,14 +172,11 @@ let compile opts copts ~echo ~f_in ~f_out =
       Stm.reset_task_queue ()
 
   | Vio2Vo ->
-
-      Flags.record_aux_file := false;
-      Dumpglob.noglob ();
       let long_f_dot_vio, long_f_dot_vo =
         ensure_exists_with_prefix f_in f_out ".vio" ".vo" in
-      let sum, lib, univs, disch, tasks, proofs =
+      let sum, lib, univs, tasks, proofs =
         Library.load_library_todo long_f_dot_vio in
-      let univs, proofs = Stm.finish_tasks long_f_dot_vo univs disch proofs tasks in
+      let univs, proofs = Stm.finish_tasks long_f_dot_vo univs proofs tasks in
       Library.save_library_raw long_f_dot_vo sum lib univs proofs
 
 let compile opts copts ~echo ~f_in ~f_out =
@@ -195,7 +193,7 @@ let compile_file opts copts (f_in, echo) =
     compile opts copts ~echo ~f_in ~f_out
 
 let compile_files opts copts =
-  let compile_list = List.rev copts.compile_list in
+  let compile_list = copts.compile_list in
   List.iter (compile_file opts copts) compile_list
 
 (******************************************************************************)
@@ -207,7 +205,7 @@ let check_vio_tasks copts =
         let f_in = ensure ".vio" f f in
         ensure_exists f_in;
         Vio_checking.check_vio (n,f_in) && acc)
-      true (List.rev copts.vio_tasks) in
+      true copts.vio_tasks in
   if not rc then fatal_error Pp.(str "VIO Task Check failed")
 
 (* vio files *)

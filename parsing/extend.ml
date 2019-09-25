@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -79,8 +79,10 @@ type ('a,'b,'c) ty_user_symbol =
 
 (** {5 Type-safe grammar extension} *)
 
-type norec = NoRec    (* just two *)
-type mayrec = MayRec  (* incompatible types *)
+(* Should be merged with gramlib's implementation *)
+
+type norec = Gramlib.Grammar.ty_norec
+type mayrec = Gramlib.Grammar.ty_mayrec
 
 type ('self, 'trec, 'a) symbol =
 | Atoken : 'c Tok.p -> ('self, norec, 'c) symbol
@@ -107,15 +109,3 @@ and 'a rules =
 
 type 'a production_rule =
 | Rule : ('a, _, 'act, Loc.t -> 'a) rule * 'act -> 'a production_rule
-
-type 'a single_extend_statement =
-  string option *
-  (* Level *)
-  Gramlib.Gramext.g_assoc option *
-  (* Associativity *)
-  'a production_rule list
-  (* Symbol list with the interpretation function *)
-
-type 'a extend_statement =
-  Gramlib.Gramext.position option *
-  'a single_extend_statement list

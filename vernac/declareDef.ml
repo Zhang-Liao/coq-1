@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -8,51 +8,68 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-open Decl_kinds
 open Declare
-open Entries
-open Globnames
 open Impargs
 
-let warn_local_declaration =
-  CWarnings.create ~name:"local-declaration" ~category:"scope"
-    Pp.(fun (id,kind) ->
-        Names.Id.print id ++ strbrk " is declared as a local " ++ str kind)
+type locality = Discharge | Global of Declare.import_status
 
-let get_locality id ~kind = function
-| Discharge ->
-  (* If a Let is defined outside a section, then we consider it as a local definition *)
-   warn_local_declaration (id,kind);
-  true
-| Local -> true
-| Global -> false
+(* Hooks naturally belong here as they apply to both definitions and lemmas *)
+module Hook = struct
+  module S = struct
+    type t =
+      { uctx : UState.t
+      (** [ustate]: universe constraints obtained when the term was closed *)
+      ; obls : (Names.Id.t * Constr.t) list
+      (** [(n1,t1),...(nm,tm)]: association list between obligation
+          name and the corresponding defined term (might be a constant,
+          but also an arbitrary term in the Expand case of obligations) *)
+      ; scope : locality
+      (**  [locality]: Locality of the original declaration *)
+      ; dref : Names.GlobRef.t
+      (** [ref]: identifier of the original declaration *)
+      }
+  end
 
-let declare_definition ident (local, p, k) ?hook_data ce pl imps =
-  let fix_exn = Future.fix_exn_of ce.const_entry_body in
-  let gr = match local with
-  | Discharge when Lib.sections_are_opened () ->
-      let _ = declare_variable ident (Lib.cwd(), SectionLocalDef ce, IsDefinition k) in
-      VarRef ident
-  | Discharge | Local | Global ->
-      let local = get_locality ident ~kind:"definition" local in
-      let kn = declare_constant ident ~local (DefinitionEntry ce, IsDefinition k) in
-      let gr = ConstRef kn in
-      let () = Declare.declare_univ_binders gr pl in
+  type t = (S.t -> unit) CEphemeron.key
+
+  let make hook = CEphemeron.create hook
+
+  let call ?hook ?fix_exn x =
+    try Option.iter (fun hook -> CEphemeron.get hook x) hook
+    with e when CErrors.noncritical e ->
+      let e = CErrors.push e in
+      let e = Option.cata (fun fix -> fix e) e fix_exn in
+      Util.iraise e
+end
+
+(* Locality stuff *)
+let declare_definition ~name ~scope ~kind ?hook_data udecl ce imps =
+  let fix_exn = Future.fix_exn_of ce.proof_entry_body in
+  let gr = match scope with
+  | Discharge ->
+      let () =
+        declare_variable ~name ~kind:Decls.(IsDefinition kind) (SectionLocalDef ce)
+      in
+      Names.GlobRef.VarRef name
+  | Global local ->
+      let kn = declare_constant ~name ~local ~kind:Decls.(IsDefinition kind) (DefinitionEntry ce) in
+      let gr = Names.GlobRef.ConstRef kn in
+      let () = Declare.declare_univ_binders gr udecl in
       gr
   in
   let () = maybe_declare_manual_implicits false gr imps in
-  let () = definition_message ident in
+  let () = definition_message name in
   begin
     match hook_data with
     | None -> ()
-    | Some (hook, uctx, extra_defs) ->
-      Lemmas.call_hook ~fix_exn ~hook uctx extra_defs local gr
+    | Some (hook, uctx, obls) ->
+      Hook.call ~fix_exn ~hook { Hook.S.uctx; obls; scope; dref = gr }
   end;
   gr
 
-let declare_fix ?(opaque = false) ?hook_data (_,poly,_ as kind) pl univs f ((def,_),eff) t imps =
+let declare_fix ?(opaque = false) ?hook_data ~name ~scope ~kind udecl univs ((def,_),eff) t imps =
   let ce = definition_entry ~opaque ~types:t ~univs ~eff def in
-  declare_definition f kind ?hook_data ce pl imps
+  declare_definition ~name ~scope ~kind ?hook_data udecl ce imps
 
 let check_definition_evars ~allow_evars sigma =
   let env = Global.env () in

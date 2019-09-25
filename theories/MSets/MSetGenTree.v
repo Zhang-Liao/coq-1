@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -48,7 +48,6 @@ Module Type Ops (X:OrderedType)(Info:InfoTyp).
 Definition elt := X.t.
 Hint Transparent elt : core.
 
-#[universes(template)]
 Inductive tree  : Type :=
 | Leaf : tree
 | Node : Info.t -> tree -> X.t -> tree -> tree.
@@ -168,7 +167,6 @@ end.
 (** Enumeration of the elements of a tree. This corresponds
     to the "samefringe" notion in the literature. *)
 
-#[universes(template)]
 Inductive enumeration :=
  | End : enumeration
  | More : elt -> tree -> enumeration -> enumeration.

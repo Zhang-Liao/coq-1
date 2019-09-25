@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -10,7 +10,6 @@
 
 open Names
 open Constr
-open Declare
 
 (** This module provides support for registering inductive scheme builders,
    declaring schemes and generating schemes on demand *)
@@ -21,10 +20,15 @@ type mutual
 type individual
 type 'a scheme_kind
 
+type internal_flag =
+  | UserAutomaticRequest
+  | InternalTacticRequest
+  | UserIndividualRequest
+
 type mutual_scheme_object_function =
-  internal_flag -> MutInd.t -> constr array Evd.in_evar_universe_context * Safe_typing.private_constants
+  internal_flag -> MutInd.t -> constr array Evd.in_evar_universe_context * Evd.side_effects
 type individual_scheme_object_function =
-  internal_flag -> inductive -> constr Evd.in_evar_universe_context * Safe_typing.private_constants
+  internal_flag -> inductive -> constr Evd.in_evar_universe_context * Evd.side_effects
 
 (** Main functions to register a scheme builder *)
 
@@ -39,13 +43,13 @@ val declare_individual_scheme_object : string -> ?aux:string ->
 
 val define_individual_scheme : individual scheme_kind -> 
   internal_flag (** internal *) ->
-  Id.t option -> inductive -> Constant.t * Safe_typing.private_constants
+  Id.t option -> inductive -> Constant.t * Evd.side_effects
 
 val define_mutual_scheme : mutual scheme_kind -> internal_flag (** internal *) ->
-  (int * Id.t) list -> MutInd.t -> Constant.t array * Safe_typing.private_constants
+  (int * Id.t) list -> MutInd.t -> Constant.t array * Evd.side_effects
 
 (** Main function to retrieve a scheme in the cache or to generate it *)
-val find_scheme : ?mode:internal_flag -> 'a scheme_kind -> inductive -> Constant.t * Safe_typing.private_constants
+val find_scheme : ?mode:internal_flag -> 'a scheme_kind -> inductive -> Constant.t * Evd.side_effects
 
 val check_scheme : 'a scheme_kind -> inductive -> bool
 

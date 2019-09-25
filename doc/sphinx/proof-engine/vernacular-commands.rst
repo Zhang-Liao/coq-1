@@ -627,6 +627,7 @@ file is a particular case of module called *library file*.
       as ``Export``.
 
    .. cmdv:: From @dirpath Require @qualid
+      :name: From ... Require ...
 
       This command acts as :cmd:`Require`, but picks
       any library whose absolute name is of the form :n:`@dirpath.@dirpath’.@qualid`
@@ -869,26 +870,6 @@ interactively, they cannot be part of a vernacular file loaded via
    above), the :cmd:`BackTo` command now handles proof states. For that, it may
    have to undo some extra commands and end on a state :n:`@num′ ≤ @num` if
    necessary.
-
-   .. cmdv:: Backtrack @num @num @num
-      :name: Backtrack
-
-      .. deprecated:: 8.4
-
-      :cmd:`Backtrack` is a *deprecated* form of
-      :cmd:`BackTo` which allows explicitly manipulating the proof environment. The
-      three numbers represent the following:
-
-      + *first number* : State label to reach, as for :cmd:`BackTo`.
-      + *second number* : *Proof state number* to unbury once aborts have been done.
-        |Coq| will compute the number of :cmd:`Undo` to perform (see Chapter :ref:`proofhandling`).
-      + *third number* : Number of :cmd:`Abort` to perform, i.e. the number of currently
-        opened nested proofs that must be canceled (see Chapter :ref:`proofhandling`).
-
-   .. exn:: Invalid backtrack.
-
-      The destination state label is unknown.
-
 
 .. _quitting-and-debugging:
 
@@ -1223,6 +1204,79 @@ Controlling the locality of commands
      modifier extends the effect outside the module even when the command
      occurs in a section.  The :cmd:`Set` and :cmd:`Unset` commands belong to this
      category.
+
+.. _controlling-typing-flags:
+
+Controlling Typing Flags
+----------------------------
+
+.. flag:: Guard Checking
+
+   This option can be used to enable/disable the guard checking of
+   fixpoints. Warning: this can break the consistency of the system, use at your
+   own risk. Decreasing argument can still be specified: the decrease is not checked
+   anymore but it still affects the reduction of the term. Unchecked fixpoints are
+   printed by :cmd:`Print Assumptions`.
+
+.. flag:: Positivity Checking
+
+   This option can be used to enable/disable the positivity checking of inductive
+   types and the productivity checking of coinductive types. Warning: this can
+   break the consistency of the system, use at your own risk. Unchecked
+   (co)inductive types are printed by :cmd:`Print Assumptions`.
+
+.. flag:: Universe Checking
+
+   This option can be used to enable/disable the checking of universes, providing a
+   form of "type in type".  Warning: this breaks the consistency of the system, use
+   at your own risk.  Constants relying on "type in type" are printed by
+   :cmd:`Print Assumptions`. It has the same effect as `-type-in-type` command line
+   argument (see :ref:`command-line-options`).
+
+.. cmd:: Print Typing Flags
+
+   Print the status of the three typing flags: guard checking, positivity checking
+   and universe checking.
+
+.. example::
+
+   .. coqtop:: all reset
+
+        Unset Guard Checking.
+
+        Print Typing Flags.
+
+        Fixpoint f (n : nat) : False
+          := f n.
+
+        Fixpoint ackermann (m n : nat) {struct m} : nat :=
+          match m with
+          | 0 => S n
+          | S m =>
+            match n with
+            | 0 => ackermann m 1
+            | S n => ackermann m (ackermann (S m) n)
+            end
+          end.
+
+        Print Assumptions ackermann.
+
+   Note that the proper way to define the Ackermann function is to use
+   an inner fixpoint:
+
+   .. coqtop:: all reset
+
+        Fixpoint ack m :=
+          fix ackm n :=
+          match m with
+          | 0 => S n
+          | S m' =>
+            match n with
+            | 0 => ack m' 1
+            | S n' => ack m' (ackm n')
+            end
+          end.
+
 
 .. _internal-registration-commands:
 

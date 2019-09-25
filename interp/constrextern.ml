@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -16,7 +16,6 @@ open Names
 open Nameops
 open Termops
 open Libnames
-open Globnames
 open Namegen
 open Impargs
 open CAst
@@ -28,7 +27,6 @@ open Glob_ops
 open Pattern
 open Notation
 open Detyping
-open Decl_kinds
 
 module NamedDecl = Context.Named.Declaration
 (*i*)
@@ -69,7 +67,7 @@ let print_no_symbol = ref false
 (* Turning notations and scopes on and off for printing *)
 module IRuleSet = Set.Make(struct
     type t = interp_rule
-    let compare x y = Pervasives.compare x y
+    let compare x y = compare x y
   end)
 
 let inactive_notations_table =
@@ -361,7 +359,7 @@ let mkPat ?loc qid l = CAst.make ?loc @@
   if List.is_empty l then CPatAtom (Some qid) else CPatCstr (qid,None,l)
 
 let pattern_printable_in_both_syntax (ind,_ as c) =
-  let impl_st = extract_impargs_data (implicits_of_global (ConstructRef c)) in
+  let impl_st = extract_impargs_data (implicits_of_global (GlobRef.ConstructRef c)) in
   let nb_params = Inductiveops.inductive_nparams (Global.env()) ind in
   List.exists (fun (_,impls) ->
     (List.length impls >= nb_params) &&
@@ -416,7 +414,7 @@ let rec extern_cases_pattern_in_scope (custom,scopes as allscopes) vars pat =
 		          (* we don't want to have 'x := _' in our patterns *)
                           acc
 		       | Some c, _ ->
-                          ((extern_reference ?loc Id.Set.empty (ConstRef c), pat) :: acc)
+                          ((extern_reference ?loc Id.Set.empty (GlobRef.ConstRef c), pat) :: acc)
                        | _ -> raise No_match in
                      ip q tail acc
 	          | _ -> assert false
@@ -424,14 +422,14 @@ let rec extern_cases_pattern_in_scope (custom,scopes as allscopes) vars pat =
 	      CPatRecord(List.rev (ip projs args []))
 	    with
 		Not_found | No_match | Exit ->
-                  let c = extern_reference Id.Set.empty (ConstructRef cstrsp) in
+                  let c = extern_reference Id.Set.empty (GlobRef.ConstructRef cstrsp) in
                   if Constrintern.get_asymmetric_patterns () then
 		    if pattern_printable_in_both_syntax cstrsp
 		    then CPatCstr (c, None, args)
 		    else CPatCstr (c, Some (add_patt_for_params (fst cstrsp) args), [])
 		  else
 		    let full_args = add_patt_for_params (fst cstrsp) args in
-		    match drop_implicits_in_patt (ConstructRef cstrsp) 0 full_args with
+                    match drop_implicits_in_patt (GlobRef.ConstructRef cstrsp) 0 full_args with
 		      | Some true_args -> CPatCstr (c, None, true_args)
 		      | None           -> CPatCstr (c, Some full_args, [])
           in
@@ -500,7 +498,7 @@ and extern_notation_pattern allscopes vars t = function
       match DAst.get t with
         | PatCstr (cstr,args,na) ->
           let t = if na = Anonymous then t else DAst.make ?loc (PatCstr (cstr,args,Anonymous)) in
-	  let p = apply_notation_to_pattern ?loc (ConstructRef cstr)
+          let p = apply_notation_to_pattern ?loc (GlobRef.ConstructRef cstr)
             (match_notation_constr_cases_pattern t pat) allscopes vars keyrule in
 	  insert_pat_alias ?loc p na
 	| PatVar Anonymous -> CAst.make ?loc @@ CPatAtom None
@@ -513,7 +511,7 @@ let rec extern_notation_ind_pattern allscopes vars ind args = function
   | (keyrule,pat,n as _rule)::rules ->
     try
       if is_inactive_rule keyrule then raise No_match;
-      apply_notation_to_pattern (IndRef ind)
+      apply_notation_to_pattern (GlobRef.IndRef ind)
         (match_notation_constr_ind_pattern ind args pat) allscopes vars keyrule
     with
         No_match -> extern_notation_ind_pattern allscopes vars ind args rules
@@ -522,7 +520,7 @@ let extern_ind_pattern_in_scope (custom,scopes as allscopes) vars ind args =
   (* pboutill: There are letins in pat which is incompatible with notations and
      not explicit application. *)
   if !Flags.in_debugger||Inductiveops.inductive_has_local_defs (Global.env()) ind then
-    let c = extern_reference vars (IndRef ind) in
+    let c = extern_reference vars (GlobRef.IndRef ind) in
     let args = List.map (extern_cases_pattern_in_scope allscopes vars) args in
     CAst.make @@ CPatCstr (c, Some (add_patt_for_params ind args), [])
   else
@@ -531,9 +529,9 @@ let extern_ind_pattern_in_scope (custom,scopes as allscopes) vars ind args =
       extern_notation_ind_pattern allscopes vars ind args
           (uninterp_ind_pattern_notations ind)
     with No_match ->
-      let c = extern_reference vars (IndRef ind) in
+      let c = extern_reference vars (GlobRef.IndRef ind) in
       let args = List.map (extern_cases_pattern_in_scope allscopes vars) args in
-      match drop_implicits_in_patt (IndRef ind) 0 args with
+      match drop_implicits_in_patt (GlobRef.IndRef ind) 0 args with
 	   |Some true_args -> CAst.make @@ CPatCstr (c, None, true_args)
 	   |None           -> CAst.make @@ CPatCstr (c, Some args, [])
 
@@ -757,11 +755,10 @@ let extended_glob_local_binder_of_decl ?loc u = DAst.make ?loc (extended_glob_lo
 (* mapping glob_constr to constr_expr                                    *)
 
 let extern_glob_sort = function
-  | GSProp -> GSProp
-  | GProp -> GProp
-  | GSet -> GSet
-  | GType _ as s when !print_universes -> s
-  | GType _ -> GType []
+  (* In case we print a glob_constr w/o having passed through detyping *)
+  | UNamed [(GSProp,0) | (GProp,0) | (GSet,0)] as u -> u
+  | UNamed _ when not !print_universes -> UAnonymous {rigid=true}
+  | UNamed _ | UAnonymous _ as u -> u
 
 let extern_universes = function
   | Some _ as l when !print_universes -> l
@@ -826,7 +823,7 @@ let rec extern inctx scopes vars r =
 	     begin
 	       try
                  if !Flags.raw_print then raise Exit;
-		 let cstrsp = match ref with ConstructRef c -> c | _ -> raise Not_found in
+                 let cstrsp = match ref with GlobRef.ConstructRef c -> c | _ -> raise Not_found in
 		 let struc = Recordops.lookup_structure (fst cstrsp) in
                  if PrintingRecord.active (fst cstrsp) then
                    ()
@@ -859,7 +856,7 @@ let rec extern inctx scopes vars r =
 				     (* we give up since the constructor is not complete *)
 				 | (arg, scopes) :: tail ->
                                      let head = extern true scopes vars arg in
-                                     ip q locs' tail ((extern_reference ?loc Id.Set.empty (ConstRef c), head) :: acc)
+                                     ip q locs' tail ((extern_reference ?loc Id.Set.empty (GlobRef.ConstRef c), head) :: acc)
 		   in
 		 CRecord (List.rev (ip projs locals args []))
 	       with
@@ -1239,7 +1236,7 @@ let rec glob_of_pat avoid env sigma pat = DAst.make @@ match pat with
       GVar id
   | PMeta None -> GHole (Evar_kinds.InternalHole, IntroAnonymous,None)
   | PMeta (Some n) -> GPatVar (Evar_kinds.FirstOrderPatVar n)
-  | PProj (p,c) -> GApp (DAst.make @@ GRef (ConstRef (Projection.constant p),None),
+  | PProj (p,c) -> GApp (DAst.make @@ GRef (GlobRef.ConstRef (Projection.constant p),None),
 			 [glob_of_pat avoid env sigma c])
   | PApp (f,args) ->
       GApp (glob_of_pat avoid env sigma f,Array.map_to_list (glob_of_pat avoid env sigma) args)
@@ -1312,10 +1309,10 @@ let rec glob_of_pat avoid env sigma pat = DAst.make @@ match pat with
           Array.map (fun (bl,_,_) -> bl) v,
           Array.map (fun (_,_,ty) -> ty) v,
           Array.map (fun (_,bd,_) -> bd) v)
-  | PSort Sorts.InSProp -> GSort GSProp
-  | PSort Sorts.InProp -> GSort GProp
-  | PSort Sorts.InSet -> GSort GSet
-  | PSort Sorts.InType -> GSort (GType [])
+  | PSort Sorts.InSProp -> GSort (UNamed [GSProp,0])
+  | PSort Sorts.InProp -> GSort (UNamed [GProp,0])
+  | PSort Sorts.InSet -> GSort (UNamed [GSet,0])
+  | PSort Sorts.InType -> GSort (UAnonymous {rigid=true})
   | PInt i -> GInt i
 
 let extern_constr_pattern env sigma pat =

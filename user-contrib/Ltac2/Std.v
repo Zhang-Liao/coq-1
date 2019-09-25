@@ -1,9 +1,11 @@
 (************************************************************************)
-(*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2016     *)
+(*         *   The Coq Proof Assistant / The Coq Development Team       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
+(* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
-(*    //   *      This file is distributed under the terms of the       *)
-(*         *       GNU Lesser General Public License Version 2.1        *)
+(*    //   *    This file is distributed under the terms of the         *)
+(*         *     GNU Lesser General Public License Version 2.1          *)
+(*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
 Require Import Ltac2.Init.
@@ -145,7 +147,7 @@ Ltac2 @ external set : evar_flag -> (unit -> ident option * constr) -> clause ->
 Ltac2 @ external remember : evar_flag -> ident option -> (unit -> constr) -> intro_pattern option -> clause -> unit := "ltac2" "tac_remember".
 
 Ltac2 @ external destruct : evar_flag -> induction_clause list ->
-  constr_with_bindings option -> unit := "ltac2" "tac_induction".
+  constr_with_bindings option -> unit := "ltac2" "tac_destruct".
 
 Ltac2 @ external induction : evar_flag -> induction_clause list ->
   constr_with_bindings option -> unit := "ltac2" "tac_induction".

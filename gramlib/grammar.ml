@@ -10,6 +10,9 @@ open Util
 
 module type GLexerType = Plexing.Lexer
 
+type ty_norec = TyNoRec
+type ty_mayrec = TyMayRec
+
 module type S =
   sig
     type te
@@ -23,12 +26,10 @@ module type S =
         val create : string -> 'a e
         val parse : 'a e -> parsable -> 'a
         val name : 'a e -> string
-        val of_parser : string -> (te Stream.t -> 'a) -> 'a e
+        val of_parser : string -> (Plexing.location_function -> te Stream.t -> 'a) -> 'a e
         val parse_token_stream : 'a e -> te Stream.t -> 'a
         val print : Format.formatter -> 'a e -> unit
       end
-    type ty_norec = TyNoRec
-    type ty_mayrec = TyMayRec
     type ('self, 'trec, 'a) ty_symbol
     type ('self, 'trec, 'f, 'r) ty_rule
     type 'a ty_rules
@@ -92,9 +93,6 @@ let tokens con =
     egram.gtokens;
   !list
 
-type ty_norec = TyNoRec
-type ty_mayrec = TyMayRec
-
 type ('a, 'b, 'c) ty_and_rec =
 | NoRec2 : (ty_norec, ty_norec, ty_norec) ty_and_rec
 | MayRec2 : ('a, 'b, ty_mayrec) ty_and_rec
@@ -112,7 +110,7 @@ type 'a ty_entry = {
 
 and 'a ty_desc =
 | Dlevels of 'a ty_level list
-| Dparser of 'a parser_t
+| Dparser of (Plexing.location_function -> 'a parser_t)
 
 and 'a ty_level = Level : (_, _, 'a) ty_rec_level -> 'a ty_level
 
@@ -871,39 +869,33 @@ and print_rule : type s tr p. formatter -> (s, tr, p) ty_symbols -> unit =
 and print_level : type s. _ -> _ -> s ex_symbols list -> _ =
   fun ppf pp_print_space rules ->
   fprintf ppf "@[<hov 0>[ ";
-  let _ =
-    List.fold_left
-      (fun sep (ExS rule) ->
-         fprintf ppf "%t%a" sep print_rule rule;
-         fun ppf -> fprintf ppf "%a| " pp_print_space ())
-      (fun ppf -> ()) rules
+  let () =
+    Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf "%a| " pp_print_space ())
+      (fun ppf (ExS rule) -> print_rule ppf rule)
+      ppf rules
   in
   fprintf ppf " ]@]"
 
 let print_levels ppf elev =
-  let _ =
-    List.fold_left
-      (fun sep (Level lev) ->
-         let rules =
-           List.map (fun (ExS t) -> ExS (TCns (MayRec2, Sself, t))) (flatten_tree lev.lsuffix) @
-           flatten_tree lev.lprefix
-         in
-         fprintf ppf "%t@[<hov 2>" sep;
-         begin match lev.lname with
+  Format.pp_print_list ~pp_sep:(fun ppf () -> fprintf ppf "@,| ")
+    (fun ppf (Level lev) ->
+       let rules =
+         List.map (fun (ExS t) -> ExS (TCns (MayRec2, Sself, t))) (flatten_tree lev.lsuffix) @
+         flatten_tree lev.lprefix
+       in
+       fprintf ppf "@[<hov 2>";
+       begin match lev.lname with
            Some n -> fprintf ppf "%a@;<1 2>" print_str n
          | None -> ()
-         end;
-         begin match lev.assoc with
+       end;
+       begin match lev.assoc with
            LeftA -> fprintf ppf "LEFTA"
          | RightA -> fprintf ppf "RIGHTA"
          | NonA -> fprintf ppf "NONA"
-         end;
-         fprintf ppf "@]@;<1 2>";
-         print_level ppf pp_force_newline rules;
-         fun ppf -> fprintf ppf "@,| ")
-      (fun ppf -> ()) elev
-  in
-  ()
+       end;
+       fprintf ppf "@]@;<1 2>";
+       print_level ppf pp_force_newline rules)
+    ppf elev
 
 let print_entry ppf e =
   fprintf ppf "@[<v 0>[ ";
@@ -1455,7 +1447,7 @@ let start_parser_of_entry entry =
   match entry.edesc with
     Dlevels [] -> empty_entry entry.ename
   | Dlevels elev -> start_parser_of_levels entry 0 elev
-  | Dparser p -> fun levn strm -> p strm
+  | Dparser p -> fun levn strm -> p !floc strm
 
 (* Extend syntax *)
 
@@ -1555,9 +1547,9 @@ let clear_entry e =
         let parse_token_stream (e : 'a e) ts : 'a =
           e.estart 0 ts
         let name e = e.ename
-        let of_parser n (p : te Stream.t -> 'a) : 'a e =
+        let of_parser n (p : Plexing.location_function -> te Stream.t -> 'a) : 'a e =
           { ename = n;
-           estart = (fun _ -> p);
+           estart = (fun _ -> p !floc);
            econtinue =
              (fun _ _ _ (strm__ : _ Stream.t) -> raise Stream.Failure);
            edesc = Dparser p}

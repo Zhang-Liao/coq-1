@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -24,7 +24,6 @@ open Tactics
 open Pretype_errors
 open Typeclasses
 open Constrexpr
-open Globnames
 open Evd
 open Tactypes
 open Locus
@@ -547,7 +546,7 @@ let rewrite_core_unif_flags = {
   Unification.check_applied_meta_types = true;
   Unification.use_pattern_unification = true;
   Unification.use_meta_bound_pattern_unification = true;
-  Unification.frozen_evars = Evar.Set.empty;
+  Unification.allowed_evars = Unification.AllowAll;
   Unification.restrict_conv_on_strict_subterms = false;
   Unification.modulo_betaiota = false;
   Unification.modulo_eta = true;
@@ -946,9 +945,9 @@ let fold_match ?(force=false) env sigma c =
 	  if dep then case_dep_scheme_kind_from_prop
 	  else case_scheme_kind_from_prop
 	else (
-	  if dep
-	  then case_dep_scheme_kind_from_type_in_prop
-	  else case_scheme_kind_from_type)
+          if dep
+          then case_dep_scheme_kind_from_type_in_prop
+          else case_scheme_kind_from_type)
       else ((* sortc <> InProp by typing *)
 	if dep
 	then case_dep_scheme_kind_from_type
@@ -1795,7 +1794,7 @@ let declare_an_instance n s args =
 let declare_instance a aeq n s = declare_an_instance n s [a;aeq]
 
 let anew_instance atts binders (name,t) fields =
-  let _id = Classes.new_instance atts.polymorphic
+  let _id = Classes.new_instance ~poly:atts.polymorphic
       name binders t (true, CAst.make @@ CRecord (fields))
       ~global:atts.global ~generalize:false Hints.empty_hint_info
   in
@@ -1898,11 +1897,11 @@ let declare_projection n instance_id r =
   let univs = Evd.univ_entry ~poly sigma in
   let typ = EConstr.to_constr sigma typ in
   let term = EConstr.to_constr sigma term in
-  let cst = 
-    Declare.definition_entry ~types:typ ~univs term
-  in
-    ignore(Declare.declare_constant n 
-	   (Entries.DefinitionEntry cst, Decl_kinds.IsDefinition Decl_kinds.Definition))
+  let cst = Declare.definition_entry ~types:typ ~univs term in
+  let _ : Constant.t =
+    Declare.declare_constant ~name:n ~kind:Decls.(IsDefinition Definition)
+      (Declare.DefinitionEntry cst)
+  in ()
 
 let build_morphism_signature env sigma m =
   let m,ctx = Constrintern.interp_constr env sigma m in
@@ -1962,7 +1961,6 @@ let add_setoid atts binders a aeq t n =
      (qualid_of_ident (Id.of_string "Equivalence_Symmetric"), mkappc "Seq_sym" [a;aeq;t]);
      (qualid_of_ident (Id.of_string "Equivalence_Transitive"), mkappc "Seq_trans" [a;aeq;t])]
 
-
 let make_tactic name =
   let open Tacexpr in
   let tacqid = Libnames.qualid_of_string name in
@@ -1979,39 +1977,38 @@ let add_morphism_as_parameter atts m n : unit =
   let evd = Evd.from_env env in
   let uctx, instance = build_morphism_signature env evd m in
   let uctx = UState.univ_entry ~poly:atts.polymorphic uctx in
-  let cst = Declare.declare_constant ~internal:Declare.InternalTacticRequest instance_id
-      (Entries.ParameterEntry
-         (None,(instance,uctx),None),
-       Decl_kinds.IsAssumption Decl_kinds.Logical)
+  let cst = Declare.declare_constant ~name:instance_id
+      ~kind:Decls.(IsAssumption Logical)
+      (Declare.ParameterEntry (None,(instance,uctx),None))
   in
   Classes.add_instance (Classes.mk_instance
-                  (PropGlobal.proper_class env evd) Hints.empty_hint_info atts.global (ConstRef cst));
-  declare_projection n instance_id (ConstRef cst)
+                  (PropGlobal.proper_class env evd) Hints.empty_hint_info atts.global (GlobRef.ConstRef cst));
+  declare_projection n instance_id (GlobRef.ConstRef cst)
 
-let add_morphism_interactive atts m n : Proof_global.t =
+let add_morphism_interactive atts m n : Lemmas.t =
   warn_add_morphism_deprecated ?loc:m.CAst.loc ();
   init_setoid ();
   let instance_id = add_suffix n "_Proper" in
   let env = Global.env () in
   let evd = Evd.from_env env in
   let uctx, instance = build_morphism_signature env evd m in
-  let kind = Decl_kinds.Global, atts.polymorphic,
-             Decl_kinds.DefinitionBody Decl_kinds.Instance
-  in
+  let poly = atts.polymorphic in
+  let kind = Decls.(IsDefinition Instance) in
   let tac = make_tactic "Coq.Classes.SetoidTactics.add_morphism_tactic" in
-  let hook _ _ _ = function
-    | Globnames.ConstRef cst ->
+  let hook { DeclareDef.Hook.S.dref; _ } = dref |> function
+    | GlobRef.ConstRef cst ->
       Classes.add_instance (Classes.mk_instance
                       (PropGlobal.proper_class env evd) Hints.empty_hint_info
-                      atts.global (ConstRef cst));
-      declare_projection n instance_id (ConstRef cst)
+                      atts.global (GlobRef.ConstRef cst));
+      declare_projection n instance_id (GlobRef.ConstRef cst)
     | _ -> assert false
   in
-  let hook = Lemmas.mk_hook hook in
+  let hook = DeclareDef.Hook.make hook in
+  let info = Lemmas.Info.make ~hook ~kind () in
   Flags.silently
     (fun () ->
-       let pstate = Lemmas.start_proof ~hook instance_id kind (Evd.from_ctx uctx) (EConstr.of_constr instance) in
-       fst Pfedit.(by (Tacinterp.interp tac) pstate)) ()
+       let lemma = Lemmas.start_lemma ~name:instance_id ~poly ~info (Evd.from_ctx uctx) (EConstr.of_constr instance) in
+       fst (Lemmas.by (Tacinterp.interp tac) lemma)) ()
 
 let add_morphism atts binders m s n =
   init_setoid ();
@@ -2023,12 +2020,12 @@ let add_morphism atts binders m s n =
        [cHole; s; m])
   in
   let tac = Tacinterp.interp (make_tactic "add_morphism_tactic") in
-  let _id, pstate = Classes.new_instance_interactive
-      ~global:atts.global atts.polymorphic
+  let _id, lemma = Classes.new_instance_interactive
+      ~global:atts.global ~poly:atts.polymorphic
       instance_name binders instance_t
       ~generalize:false ~tac ~hook:(declare_projection n instance_id) Hints.empty_hint_info
   in
-  pstate (* no instance body -> always open proof *)
+  lemma (* no instance body -> always open proof *)
 
 (** Bind to "rewrite" too *)
 

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -57,7 +57,7 @@ let pr_notation (from,ntn) = qstring ntn ++ match from with InConstrEntrySomeLev
 module NotationOrd =
   struct
     type t = notation
-    let compare = Pervasives.compare
+    let compare = pervasives_compare
   end
 
 module NotationSet = Set.Make(NotationOrd)
@@ -72,6 +72,7 @@ type notation_location = (DirPath.t * DirPath.t) * string
 type notation_data = {
   not_interp : interpretation;
   not_location : notation_location;
+  not_deprecation : Deprecation.t option;
 }
 
 type scope = {
@@ -304,7 +305,7 @@ let glob_constr_keys c = match DAst.get c with
   | _ -> [Oth]
 
 let cases_pattern_key c = match DAst.get c with
-  | PatCstr (ref,_,_) -> RefKey (canonical_gr (ConstructRef ref))
+  | PatCstr (ref,_,_) -> RefKey (canonical_gr (GlobRef.ConstructRef ref))
   | _ -> Oth
 
 let notation_constr_key = function (* Rem: NApp(NRef ref,[]) stands for @ref *)
@@ -491,10 +492,10 @@ exception NotAValidPrimToken
     considered for parsing. *)
 
 let rec constr_of_glob env sigma g = match DAst.get g with
-  | Glob_term.GRef (ConstructRef c, _) ->
+  | Glob_term.GRef (GlobRef.ConstructRef c, _) ->
       let sigma,c = Evd.fresh_constructor_instance env sigma c in
       sigma,mkConstructU c
-  | Glob_term.GRef (IndRef c, _) ->
+  | Glob_term.GRef (GlobRef.IndRef c, _) ->
       let sigma,c = Evd.fresh_inductive_instance env sigma c in
       sigma,mkIndU c
   | Glob_term.GApp (gc, gcl) ->
@@ -510,10 +511,10 @@ let rec glob_of_constr token_kind ?loc env sigma c = match Constr.kind c with
       let c = glob_of_constr token_kind ?loc env sigma c in
       let cel = List.map (glob_of_constr token_kind ?loc env sigma) (Array.to_list ca) in
       DAst.make ?loc (Glob_term.GApp (c, cel))
-  | Construct (c, _) -> DAst.make ?loc (Glob_term.GRef (ConstructRef c, None))
-  | Const (c, _) -> DAst.make ?loc (Glob_term.GRef (ConstRef c, None))
-  | Ind (ind, _) -> DAst.make ?loc (Glob_term.GRef (IndRef ind, None))
-  | Var id -> DAst.make ?loc (Glob_term.GRef (VarRef id, None))
+  | Construct (c, _) -> DAst.make ?loc (Glob_term.GRef (GlobRef.ConstructRef c, None))
+  | Const (c, _) -> DAst.make ?loc (Glob_term.GRef (GlobRef.ConstRef c, None))
+  | Ind (ind, _) -> DAst.make ?loc (Glob_term.GRef (GlobRef.IndRef ind, None))
+  | Var id -> DAst.make ?loc (Glob_term.GRef (GlobRef.VarRef id, None))
   | Int i -> DAst.make ?loc (Glob_term.GInt i)
   | _ -> Loc.raise ?loc (PrimTokenNotationError(token_kind,env,sigma,UnexpectedTerm c))
 
@@ -592,7 +593,7 @@ let rec rawnum_compare s s' =
    try
      for i = 0 to d-1 do if s.[i] != '0' then raise (Comp 1) done;
      for i = d to l-1 do
-       let c = Pervasives.compare s.[i] s'.[i-d] in
+       let c = pervasives_compare s.[i] s'.[i-d] in
        if c != 0 then raise (Comp c)
      done;
      0
@@ -835,7 +836,7 @@ let q_byte () = qualid_of_ref "core.byte.type"
 
 let unsafe_locate_ind q =
   match Nametab.locate q with
-  | IndRef i -> i
+  | GlobRef.IndRef i -> i
   | _ -> raise Not_found
 
 let locate_list () = unsafe_locate_ind (q_list ())
@@ -1095,7 +1096,7 @@ let warn_notation_overridden =
                     str "Notation" ++ spc () ++ pr_notation ntn ++ spc ()
                     ++ strbrk "was already used" ++ which_scope ++ str ".")
 
-let declare_notation_interpretation ntn scopt pat df ~onlyprint =
+let declare_notation_interpretation ntn scopt pat df ~onlyprint deprecation =
   let scope = match scopt with Some s -> s | None -> default_scope in
   let sc = find_scope scope in
   if not onlyprint then begin
@@ -1109,6 +1110,7 @@ let declare_notation_interpretation ntn scopt pat df ~onlyprint =
     let notdata = {
       not_interp = pat;
       not_location = df;
+      not_deprecation = deprecation;
     } in
     let sc = { sc with notations = NotationMap.add ntn notdata sc.notations } in
     scope_map := String.Map.add scope sc !scope_map
@@ -1125,10 +1127,10 @@ let declare_uninterpretation rule (metas,c as pat) =
 let rec find_interpretation ntn find = function
   | [] -> raise Not_found
   | Scope scope :: scopes ->
-      (try let (pat,df) = find scope in pat,(df,Some scope)
+      (try let n = find scope in (n,Some scope)
        with Not_found -> find_interpretation ntn find scopes)
   | SingleNotation ntn'::scopes when notation_eq ntn' ntn ->
-      (try let (pat,df) = find default_scope in pat,(df,None)
+      (try let n = find default_scope in (n,None)
        with Not_found ->
          (* e.g. because single notation only for constr, not cases_pattern *)
          find_interpretation ntn find scopes)
@@ -1136,8 +1138,7 @@ let rec find_interpretation ntn find = function
       find_interpretation ntn find scopes
 
 let find_notation ntn sc =
-  let n = NotationMap.find ntn (find_scope sc).notations in
-  (n.not_interp, n.not_location)
+  NotationMap.find ntn (find_scope sc).notations
 
 let notation_of_prim_token = function
   | Numeral (SPlus,n) -> InConstrEntrySomeLevel, NumTok.to_string n
@@ -1147,7 +1148,9 @@ let notation_of_prim_token = function
 let find_prim_token check_allowed ?loc p sc =
   (* Try for a user-defined numerical notation *)
   try
-    let (_,c),df = find_notation (notation_of_prim_token p) sc in
+    let n = find_notation (notation_of_prim_token p) sc in
+    let (_,c) = n.not_interp in
+    let df = n.not_location in
     let pat = Notation_ops.glob_constr_of_notation_constr ?loc c in
     check_allowed pat;
     pat, df
@@ -1167,7 +1170,9 @@ let find_prim_token check_allowed ?loc p sc =
 let interp_prim_token_gen ?loc g p local_scopes =
   let scopes = make_current_scopes local_scopes in
   let p_as_ntn = try notation_of_prim_token p with Not_found -> InConstrEntrySomeLevel,"" in
-  try find_interpretation p_as_ntn (find_prim_token ?loc g p) scopes
+  try
+    let (pat,loc), sc = find_interpretation p_as_ntn (find_prim_token ?loc g p) scopes in
+    pat, (loc,sc)
   with Not_found ->
     user_err ?loc ~hdr:"interp_prim_token"
     ((match p with
@@ -1192,11 +1197,18 @@ let rec check_allowed_ref_in_pat looked_for = DAst.(with_val (function
 let interp_prim_token_cases_pattern_expr ?loc looked_for p =
   interp_prim_token_gen ?loc (check_allowed_ref_in_pat looked_for) p
 
+let warn_deprecated_notation =
+  Deprecation.create_warning ~object_name:"Notation" ~warning_name:"deprecated-notation"
+    pr_notation
+
 let interp_notation ?loc ntn local_scopes =
   let scopes = make_current_scopes local_scopes in
-  try find_interpretation ntn (find_notation ntn) scopes
+  try
+    let (n,sc) = find_interpretation ntn (find_notation ntn) scopes in
+    Option.iter (fun d -> warn_deprecated_notation ?loc (ntn,d)) n.not_deprecation;
+    n.not_interp, (n.not_location, sc)
   with Not_found ->
-    user_err ?loc 
+    user_err ?loc
     (str "Unknown interpretation for notation " ++ pr_notation ntn ++ str ".")
 
 let uninterp_notations c =
@@ -1207,7 +1219,7 @@ let uninterp_cases_pattern_notations c =
   keymap_find (cases_pattern_key c) !notations_key_table
 
 let uninterp_ind_pattern_notations ind =
-  keymap_find (RefKey (canonical_gr (IndRef ind))) !notations_key_table
+  keymap_find (RefKey (canonical_gr (GlobRef.IndRef ind))) !notations_key_table
 
 let availability_of_notation (ntn_scope,ntn) scopes =
   let f scope =
@@ -1230,7 +1242,7 @@ type entry_coercion = notation list
 module EntryCoercionOrd =
  struct
   type t = notation_entry * notation_entry
-   let compare = Pervasives.compare
+   let compare = pervasives_compare
  end
 
 module EntryCoercionMap = Map.Make(EntryCoercionOrd)
@@ -1521,7 +1533,7 @@ let discharge_arguments_scope (_,(req,r,n,l,_)) =
     let n =
       try
         let vars = Lib.variable_section_segment_of_reference r in
-        vars |> List.map fst |> List.filter is_local_assum |> List.length
+        vars |> List.filter is_local_assum |> List.length
       with
         Not_found (* Not a ref defined in this section *) -> 0 in
     Some (req,r,n,l,[])

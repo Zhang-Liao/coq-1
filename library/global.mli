@@ -1,6 +1,6 @@
 (************************************************************************)
 (*         *   The Coq Proof Assistant / The Coq Development Team       *)
-(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2018       *)
+(*  v      *   INRIA, CNRS and contributors - Copyright 1999-2019       *)
 (* <O___,, *       (see CREDITS file for the list of authors)           *)
 (*   \VV/  **************************************************************)
 (*    //   *    This file is distributed under the terms of the         *)
@@ -22,6 +22,7 @@ val env : unit -> Environ.env
 val env_is_initial : unit -> bool
 
 val universes : unit -> UGraph.t
+val universes_lbound : unit -> Univ.Level.t
 val named_context_val : unit -> Environ.named_context_val
 val named_context : unit -> Constr.named_context
 
@@ -31,6 +32,9 @@ val named_context : unit -> Constr.named_context
 val set_engagement : Declarations.engagement -> unit
 val set_indices_matter : bool -> unit
 val set_typing_flags : Declarations.typing_flags -> unit
+val set_check_guarded : bool -> unit
+val set_check_positive : bool -> unit
+val set_check_universes : bool -> unit
 val typing_flags : unit -> Declarations.typing_flags
 val make_sprop_cumulative : unit -> unit
 val set_allow_sprop : bool -> unit
@@ -38,7 +42,7 @@ val sprop_allowed : unit -> bool
 
 (** Variables, Local definitions, constants, inductive types *)
 
-val push_named_assum : (Id.t * Constr.types * bool) Univ.in_universe_context_set -> unit
+val push_named_assum : (Id.t * Constr.types) -> unit
 val push_named_def   : (Id.t * Entries.section_def_entry) -> unit
 
 val export_private_constants : in_section:bool ->
@@ -46,7 +50,7 @@ val export_private_constants : in_section:bool ->
   Constr.constr Univ.in_universe_context_set * Safe_typing.exported_private_constant list
 
 val add_constant :
-  ?role:Entries.side_effect_role -> in_section:bool -> Id.t -> Safe_typing.global_declaration -> Constant.t * Safe_typing.private_constants
+  side_effect:'a Safe_typing.effect_entry -> in_section:bool -> Id.t -> Safe_typing.global_declaration -> Constant.t * 'a
 val add_recipe : in_section:bool -> Id.t -> Cooking.recipe -> Constant.t
 val add_mind :
   Id.t -> Entries.mutual_inductive_entry -> MutInd.t
@@ -100,13 +104,16 @@ val mind_of_delta_kn : KerName.t -> MutInd.t
 
 val opaque_tables : unit -> Opaqueproof.opaquetab
 
-val body_of_constant : Opaqueproof.indirect_accessor -> Constant.t -> (Constr.constr * Univ.AUContext.t) option
+val body_of_constant : Opaqueproof.indirect_accessor -> Constant.t ->
+  (Constr.constr * unit Opaqueproof.delayed_universes * Univ.AUContext.t) option
 (** Returns the body of the constant if it has any, and the polymorphic context
     it lives in. For monomorphic constant, the latter is empty, and for
     polymorphic constants, the term contains De Bruijn universe variables that
     need to be instantiated. *)
 
-val body_of_constant_body : Opaqueproof.indirect_accessor -> Opaqueproof.opaque Declarations.constant_body -> (Constr.constr * Univ.AUContext.t) option
+val body_of_constant_body : Opaqueproof.indirect_accessor ->
+  Opaqueproof.opaque Declarations.constant_body ->
+    (Constr.constr * unit Opaqueproof.delayed_universes * Univ.AUContext.t) option
 (** Same as {!body_of_constant} but on {!Declarations.constant_body}. *)
 
 (** {6 Compiled libraries } *)
@@ -130,6 +137,8 @@ val is_joined_environment : unit -> bool
 
 val is_polymorphic : GlobRef.t -> bool
 val is_template_polymorphic : GlobRef.t -> bool
+val is_template_checked : GlobRef.t -> bool
+val get_template_polymorphic_variables : GlobRef.t -> Univ.Level.t list
 val is_type_in_type : GlobRef.t -> bool
 
 (** {6 Retroknowledge } *)
