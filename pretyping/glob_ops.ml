@@ -308,6 +308,7 @@ let occur_glob_constr id =
        fold_glob_constr_with_binders g f barred acc c in
   occur false false
 
+(* TODO: Use this! *)
 let free_glob_vars =
   let rec vars bound vs c = match DAst.get c with
     | GVar id' -> if Id.Set.mem id' bound then vs else Id.Set.add id' vs
